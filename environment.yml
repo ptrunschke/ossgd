@@ -1,0 +1,26 @@
+name: pitt
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.10
+  - jax
+  - jaxtyping
+  - numpy
+  - scipy
+  - joblib
+  - matplotlib
+  - tqdm
+  - jupyter
+  - ipython
+  - flake8
+  - flake8-docstrings
+  - mypy
+  - black
+  - isort
+  - pytest
+  - memory_profiler
+  - snakeviz
+  - colorama
+  - pip:
+    - pytest-timeout
+    - pytest-ordering
