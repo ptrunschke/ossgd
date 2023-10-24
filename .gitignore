@@ -3,3 +3,4 @@
 .DS_Store
 micromamba
 .micromamba
+__pycache__
