@@ -7,6 +7,7 @@ import numpy as np
 from numpy.polynomial.legendre import legval
 from fourier import fourval
 from exponential import compute_exponential_coefficients
+from noisyopt import minimizeCompass
 
 from tqdm import trange
 import matplotlib.pyplot as plt
@@ -30,7 +31,7 @@ args = parser.parse_args()
 try:
     args.step_size = float(args.step_size)
 except ValueError:
-    assert args.step_size in ["constant", "adaptive", "deterministic", "deterministic_unbounded", "nouy"], args.step_size
+    assert args.step_size in ["constant", "adaptive", "deterministic", "deterministic_unbounded", "nouy", "sls", "est"], args.step_size
 
 # xi_t = 1 / t^((1 + epsilon)/2)
 # epsilon = 0.1
@@ -43,7 +44,7 @@ loss_density = lambda x: jnp.full(x.shape, 0.5)
 
 os.makedirs("data", exist_ok=True)
 os.makedirs("plots", exist_ok=True)
-if args.step_size in ["constant", "adaptive", "deterministic", "deterministic_unbounded", "nouy"]:
+if type(args.step_size) == str:
     step_size_str = args.step_size
 else:
     len_step_size_str = max(2, int(jnp.ceil(-jnp.log10(args.step_size))))
@@ -101,6 +102,7 @@ if args.target == "random":
 else:
     assert args.target == "exp"
     target_coefficients = compute_exponential_coefficients(degree=args.target_dimension-1)
+loss_integrand = lambda v: lambda x: 0.5 * (evaluate_basis(x, v) - evaluate_basis(x, target_coefficients))**2
 loss_gradient = lambda v: lambda x: evaluate_basis(x, v) - evaluate_basis(x, target_coefficients)
 minimal_loss = 0.5 * jnp.linalg.norm(target_coefficients[args.space_dimension:])**2
 print(f"Minimal loss: {minimal_loss:.2e}")
@@ -234,6 +236,47 @@ elif args.step_size == "adaptive":
         bias_step_size = s_t / jnp.sqrt(squared_gradient_norm)
         recovery_step_size = optimal_step_size * bias_step_size * jnp.sqrt(jnp.minimum(squared_gradient_norm, indep_est))
         return recovery_step_size
+elif args.step_size == "sls":
+    from noisyopt import minimizeCompass
+
+    def step_size(key, iterate, update):
+        objective_key = key
+        def objective(s):
+            nonlocal objective_key
+            points_key, objective_key = jax.random.split(objective_key)
+            points = jax.random.uniform(points_key, (args.sample_size,), minval=-1, maxval=1)
+            return np.mean(loss_integrand(iterate - s * update)(points))
+        bounds = np.array([0, maximal_step_size]).reshape(1, 2)
+        # x0 = np.array([optimal_step_size])
+        # res = minimizeCompass(objective, bounds=bounds, x0=x0, errorcontrol=True, paired=False)
+        # return res.x, res.nfev * args.sample_size
+        ss = np.linspace(bounds[0, 0], bounds[0, 1], 20)
+        os = np.array([[objective(s) for s in ss] for _ in range(100)])
+        assert os.shape == (100, 20)
+        # plt.plot(ss, np.mean(os, axis=0), 'k-', linewidth=2)
+        # for oss in os: 
+        #     plt.plot(ss, oss, "o", color="C0", alpha=0.5)
+        # plt.plot(optimal_step_size, objective(optimal_step_size), "o", color="tab:red")
+        # plt.show()
+
+        idx_min = np.argmin(np.mean(os, axis=0))
+        ss[idx_min]
+        return ss[idx_min]
+
+elif args.step_size == "est":
+    def step_size(iteration, key, iterate, update):
+        # points, weights, _ = draw_sample(key, args.sample_size, args.stability)
+        # independent_update = loss_gradient(iterate)(points) * weights @ evaluate_basis(points, jnp.eye(args.space_dimension)) / args.sample_size
+        independent_update = iterate - target_coefficients[:args.space_dimension]
+        b = (L + C) / 2 * update.T @ update
+        a = independent_update.T @ update
+        s_min = 0
+        # s_max = optimal_step_size
+        s_max = np.inf
+        # s_min = maximal_step_size / iteration**(0.5 + epsilon)
+        # s_max = maximal_step_size / iteration**(1 - epsilon)
+        return np.clip(a / (2*b), s_min, s_max)
+        
 else:
     def step_size(iteration, _):
         return args.step_size
@@ -281,7 +324,13 @@ for it in trange(1, args.iterations + 1, desc="Iteration"):
         qp_update = jnp.linalg.solve(gramian, qp_update)
     descent[it] = qp_update @ (estimate - target_coefficients[:args.space_dimension])
     squared_gradient_norm_estimate = loss_gradient(estimate)(points)**2 @ weights
-    if args.step_size == "adaptive":
+    if args.step_size == "sls":
+        step_size_key, key = jax.random.split(key, 2)
+        s = step_size(key, estimate, qp_update)
+    elif args.step_size == "est":
+        step_size_key, key = jax.random.split(key, 2)
+        s = step_size(it, key, estimate, qp_update)
+    elif args.step_size == "adaptive":
         points_2 = jax.random.uniform(key, (args.sample_size,), minval=-1, maxval=1)
         squared_gradient_norm_estimate_2 = jnp.mean(loss_gradient(estimate)(points_2)**2)
         s = step_size(it, squared_gradient_norm_estimate, squared_gradient_norm_estimate_2)
@@ -307,6 +356,7 @@ ax.loglog(steps, step_sizes, color="tab:orange", label="step size")
 #     ax.loglog(steps, cs, color="tab:purple", label="$c(\kappa)$")
 ax.loglog(steps, 1 / np.sqrt(steps), "k:", label="$t^{-1/2}$ rate")
 ax.loglog(steps, 1 / steps, "k-.", label="$t^{-1}$ rate")
+ax.axhline(minimal_loss, color="tab:red", linestyle="-.", label="minimal loss")
 ax.set_xlabel("step")
 ax.set_xlim(steps[0], steps[-1])
 ax.legend(loc="lower left")
