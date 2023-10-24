@@ -33,8 +33,8 @@ except ValueError:
     assert args.step_size in ["constant", "adaptive", "deterministic", "deterministic_unbounded", "nouy"], args.step_size
 
 # xi_t = 1 / t^((1 + epsilon)/2)
-epsilon = 0.1
-# epsilon = 0.01
+# epsilon = 0.1
+epsilon = 0.01
 # epsilon = 0.5 - 0.01
 assert 0 < epsilon < 0.5
 domain = (-1, 1)
@@ -173,18 +173,18 @@ else:
         return points, weights, sample_stability
 
 
-sample_key, key = jax.random.split(key, 2)
-points, weights, sample_stability = draw_sample(sample_key, 1_000, np.inf)
-fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-ax.plot(xs, pdf, label="pdf")
-ax.plot(xs, cdf, label="cdf")
-ax.hist(points, 40, density=True, histtype='step', label="sample points histogram")
-ax.plot(points, weights, ".", label="sampe weights")
-ax.legend()
-ax.set_title(f"Sampling density (sample stability: ${sample_stability:.2f}$)")
-plt.tight_layout()
-print("Saving density plot to", density_file_name)
-plt.savefig(f"plots/{density_file_name}")
+# sample_key, key = jax.random.split(key, 2)
+# points, weights, sample_stability = draw_sample(sample_key, 1_000, np.inf)
+# fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+# ax.plot(xs, pdf, label="pdf")
+# ax.plot(xs, cdf, label="cdf")
+# ax.hist(points, 40, density=True, histtype='step', label="sample points histogram")
+# ax.plot(points, weights, ".", label="sampe weights")
+# ax.legend()
+# ax.set_title(f"Sampling density (sample stability: ${sample_stability:.2f}$)")
+# plt.tight_layout()
+# print("Saving density plot to", density_file_name)
+# plt.savefig(f"plots/{density_file_name}")
 
 
 L = 1
