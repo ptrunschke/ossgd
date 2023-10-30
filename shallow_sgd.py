@@ -9,11 +9,17 @@ target = lambda x: jnp.sin(2 * jnp.pi * x)
 
 
 input_dimension = 1
-# width = 100
-width = 10
+# width = 10
+# NOTE: All sample size and epoch lenght parameters below are chosen for a width of 10.
+#       Using a larger width means that the approximation error is smaller.
+#       But we observe that with the previously well-chosen step size 0.01,
+#       the parameters converge to a suboptimal stationary point (loss: 1e-1),
+#       which chould also be achieved with width 10 (basis dimension == 3).
+width = 100
 output_dimension = 1
 num_parameters = output_dimension + output_dimension * width + width + width * input_dimension
 activation = lambda x: (jnp.tanh(x) + 1) / 2
+# NOTE: Interestingly, the basis functions of the tanh-activation look like polynomials of bounded degree.
 # activation = lambda x: 1 / (1 + jnp.exp(-x))
 # activation = lambda x: jnp.maximum(x, 0)
 
