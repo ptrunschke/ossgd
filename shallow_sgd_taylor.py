@@ -24,6 +24,9 @@ activation = lambda x: (jnp.tanh(x) + 1) / 2
 # activation = lambda x: 1 / (1 + jnp.exp(-x))
 # activation = lambda x: jnp.maximum(x, 0)
 
+# finite_difference = 0
+finite_difference = 0.01
+
 
 def prediction(parameters, x):
     A1, b1, A0, b0 = parameters
@@ -78,11 +81,31 @@ def devectorised_parameters(vector):
     return parameters
 
 
-def generating_system(parameters):
-    generating_system = jax.jacfwd(prediction)
+def generating_system(parameters, fd=0):
+    if fd == 0:
+        generating_system = jax.jacfwd(prediction)
 
-    def evaluate_generating_system(xs):
-        return vectorised_parameters(generating_system(parameters, xs))
+        def evaluate_generating_system(xs):
+            return vectorised_parameters(generating_system(parameters, xs))
+    else:
+        assert fd > 0
+        def evaluate_generating_system(xs):
+            assert xs.ndim == 2 and xs.shape[0] == input_dimension
+            Phi0 = prediction(parameters, xs)
+            assert Phi0.ndim == 2 and Phi0.shape[0] == output_dimension and output_dimension == 1
+
+            system = []
+            for index in range(len(parameters)):
+                for i in range(parameters[index].size):
+                    Ei = jnp.zeros((parameters[index].size,)).at[i].set(1).reshape(parameters[index].shape)
+                    parameters_variation = list(parameters)
+                    parameters_variation[index] = parameters[index] + fd * Ei
+                    Phi_variation = prediction(parameters_variation, xs)
+                    assert Phi_variation.shape == (output_dimension, xs.shape[1]) and output_dimension == 1
+                    system.append((Phi_variation - Phi0) / fd)
+            system = jnp.concatenate(system, axis=0)
+            assert system.shape == (num_parameters, xs.shape[1])
+            return system
 
     return evaluate_generating_system
 
@@ -95,7 +118,7 @@ def gramian(evaluate_basis, n=1_000):
 
 
 def basis(parameters, n=1_000):
-    system = generating_system(parameters)
+    system = generating_system(parameters, fd=finite_difference)
     gram = gramian(system, n=n)
     r = jnp.linalg.matrix_rank(gram)
     s, V = jnp.linalg.eigh(gram)
