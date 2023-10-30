@@ -8,13 +8,15 @@ target = lambda x: jnp.sin(2 * jnp.pi * x)
 
 
 input_dimension = 1
-# width = 10
+width = 10
 # NOTE: All sample size and epoch lenght parameters below are chosen for a width of 10.
 #       Using a larger width means that the approximation error is smaller.
 #       But we observe that with the previously well-chosen step size 0.01,
 #       the parameters converge to a suboptimal stationary point (loss: 1e-1),
 #       which chould also be achieved with width 10 (basis dimension == 3).
-width = 100
+# NOTE: Actually, not even width 10 achieves a global minimum,
+#       since the tangent space at the stationary point is still 7-dimensional.
+# width = 100
 output_dimension = 1
 num_parameters = output_dimension + output_dimension * width + width + width * input_dimension
 activation = lambda x: (jnp.tanh(x) + 1) / 2
@@ -51,21 +53,36 @@ def loss(parameters, xs, ys):
     return 0.5 * jnp.mean((prediction(parameters, xs) - ys)**2)
 
 
+def vectorised_parameters(parameters):
+    shapes = [(output_dimension, width), (output_dimension,), (width, input_dimension), (width,)]
+    assert len(parameters) == len(shapes)
+    offset_shape = parameters[-1].shape[:-1]
+    assert len(offset_shape) == 2 and offset_shape[0] == output_dimension and output_dimension == 1
+    vector = []
+    for parameter, shape in zip(parameters, shapes):
+        assert parameter.shape == offset_shape + shape
+        vector.append(parameter[0].reshape(offset_shape[1], -1))
+    return jnp.concatenate(vector, axis=1).T
+
+
+def devectorised_parameters(vector):
+    assert vector.shape == (num_parameters,)
+    shapes = [(output_dimension, width), (output_dimension,), (width, input_dimension), (width,)]
+    start = 0
+    parameters = []
+    for shape in shapes:
+        stop = start + jnp.prod(jnp.array(shape))
+        parameters.append(vector[start:stop].reshape(shape))
+        start = stop
+    assert vector.shape == (stop,)
+    return parameters
+
+
 def generating_system(parameters):
     generating_system = jax.jacfwd(prediction)
 
     def evaluate_generating_system(xs):
-        measures = generating_system(parameters, xs)
-        # assert len(measures) == len(parameters)
-        # assert output_dimension == 1
-        sample_size = xs.shape[1]
-        # assert xs.shape == (input_dimension, sample_size)
-        for index in range(len(parameters)):
-            # assert measures[index].shape == (output_dimension, sample_size) + parameters[index].shape
-            measures[index] = measures[index].reshape(sample_size, -1)
-        measures = jnp.concatenate(measures, axis=1)
-        # assert measures.shape == (sample_size, num_parameters)
-        return measures.T
+        return vectorised_parameters(generating_system(parameters, xs))
 
     return evaluate_generating_system
 
@@ -91,19 +108,6 @@ def gradient(parameters, xs, ys):
     return prediction(parameters, xs) - ys
 
 
-def devectorized_parameters(vector):
-    assert vector.shape == (num_parameters,)
-    shapes = [(output_dimension, width), (output_dimension,), (width, input_dimension), (width,)]
-    start = 0
-    parameters = []
-    for shape in shapes:
-        stop = start + jnp.prod(jnp.array(shape))
-        parameters.append(vector[start:stop].reshape(shape))
-        start = stop
-    assert vector.shape == (stop,)
-    return parameters
-
-
 def quasi_projected_gradient(parameters, xs, ys):
     assert xs.ndim == 2 and ys.ndim == 2
     grad = gradient(parameters, xs, ys)
@@ -114,7 +118,7 @@ def quasi_projected_gradient(parameters, xs, ys):
     assert grad.shape == (output_dimension, sample_size) and output_dimension == 1
     qs = bs @ grad[0] / sample_size
     qs = transform.T @ qs
-    return devectorized_parameters(qs)
+    return devectorised_parameters(qs)
 
 
 # @jax.jit
