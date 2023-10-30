@@ -1,7 +1,6 @@
 import jax
 import jax.numpy as jnp
 
-from tqdm import trange
 import matplotlib.pyplot as plt
 
 
