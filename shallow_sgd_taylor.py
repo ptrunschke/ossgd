@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import jax.scipy as jsp
 
 import matplotlib.pyplot as plt
 
@@ -114,7 +115,7 @@ def gramian(evaluate_basis, n=1_000):
     assert input_dimension == 1
     xs = jnp.linspace(0, 1, n).reshape(1, n)
     measures = evaluate_basis(xs).T
-    return jnp.trapz(measures[:, :, None] * measures[:, None, :], xs[0], axis=0)
+    return jsp.integrate.trapezoid(measures[:, :, None] * measures[:, None, :], xs[0], axis=0)
 
 
 def basis(parameters, n=1_000):
@@ -131,7 +132,7 @@ def gradient(parameters, xs, ys):
     return prediction(parameters, xs) - ys
 
 
-def quasi_projected_gradient(parameters, xs, ys):
+def quasi_projected_gradient(parameters, xs, ys, ws):
     assert xs.ndim == 2 and ys.ndim == 2
     grad = gradient(parameters, xs, ys)
     sample_size = xs.shape[1]
@@ -139,15 +140,15 @@ def quasi_projected_gradient(parameters, xs, ys):
     bs = transform @ system(xs)
     assert bs.shape == (basis_dimension, sample_size)
     assert grad.shape == (output_dimension, sample_size) and output_dimension == 1
-    qs = bs @ grad[0] / sample_size
+    qs = bs * ws @ grad[0] / sample_size
     qs = transform.T @ qs
     return devectorised_parameters(qs)
 
 
 # @jax.jit
-def updated_parameters(parameters, xs, ys, step_size):
+def updated_parameters(parameters, xs, ys, ws, step_size):
     # gradients = jax.grad(loss)(parameters, xs, ys)
-    gradients = quasi_projected_gradient(parameters, xs, ys)
+    gradients = quasi_projected_gradient(parameters, xs, ys, ws)
     return [θ - step_size * dθ for (θ, dθ) in zip(parameters, gradients)]
 
 # TODO: compute curvature at every step
@@ -172,12 +173,37 @@ def plot_state(title=""):
     plt.plot(xs[0], zs[0], "k--", lw=2)
     system, transform, basis_dimension = basis(parameters)
     # for bs in system(xs):
+    ks = 0
     for bs in transform @ system(xs):
         plt.plot(xs[0], bs, lw=1)
+        assert bs.shape == (xs.shape[1],)
+        ks += bs**2
+    plt.plot(xs[0], ks, "-", color="tab:red", lw=2)
     if len(title) > 0:
         title = title + "  |  "
     plt.title(title + f"Basis dimension: {basis_dimension}")
     plt.show()
+
+
+def optimal_sampling_density(parameters):
+    system, transform, basis_dimension = basis(parameters)
+    def density(xs):
+        assert xs.ndim == 2 and xs.shape[0] == input_dimension
+        ks = 0
+        for bs in transform @ system(xs):
+            assert bs.shape == (xs.shape[1],)
+            ks += bs**2
+        return ks / basis_dimension
+    return density
+
+
+# ks = optimal_sampling_density(parameters)(xs)
+# ks_mass = jsp.integrate.trapezoid(ks, xs[0])
+# assert jnp.isclose(ks_mass, 1)
+# plt.plot(xs[0], ks)
+# plt.title("Optimal sampling density")
+# plt.show()
+# exit()
 
 
 def latex_float(value, places=2):
@@ -222,9 +248,14 @@ for epoch in range(num_epochs):
         losses.append(loss(parameters, xs, ys))
         print(f"[{epoch+1:{len(str(num_epochs))}d} | {step+1:{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}")
         training_key, key = jax.random.split(key, 2)
-        xs_train = jax.random.uniform(training_key, (input_dimension, sample_size), minval=0, maxval=1)
+        osd = optimal_sampling_density(parameters)
+        assert input_dimension == 1
+        xs_train = jax.random.choice(training_key, xs[0], (sample_size,), replace=False, p=osd(xs))[None]
+        ws_train = 1 / osd(xs_train)
+        # xs_train = jax.random.uniform(training_key, (input_dimension, sample_size), minval=0, maxval=1)
+        # ws_train = jnp.ones((sample_size,))
         ys_train = target(xs_train)
-        parameters = updated_parameters(parameters, xs_train, ys_train, step_size)
+        parameters = updated_parameters(parameters, xs_train, ys_train, ws_train, step_size)
     plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}")
 
 fig, ax = plt.subplots(1, 2)
