@@ -32,6 +32,34 @@ activation = lambda x: (jnp.tanh(x) + 1) / 2
 # finite_difference = 0
 finite_difference = 0.01
 
+# method = "SGD"
+method = "NGD_quasi_projection"
+# method = "NGD_projection"
+# sample_size = 10
+sample_size = 300
+sampling = "uniform"
+# sampling = "optimal"
+num_epochs = 15
+# NOTE: The following step size is too large and yields convergence to a suboptimal stationary point.
+# step_size_rule = "constant"
+# step_size_rule = "constant_epochs"
+step_size_rule = "decreasing"
+limit_epoch = 7
+# init_step_size = 0.1
+init_step_size = 0.01
+epoch_length = 100
+# NOTE: Apparently, 1e-6 is the approximation error in this model class,
+#       since a smaller step size yields the same error.
+# step_size = 0.001
+# epoch_length = 1_000
+# NOTE: An intuitive idea is thus to use a step size schedule.
+#       But, interestingly, the GD converges to a suboptimal stationary point,
+#       which can not be escaped when the step size is reduced in later epochs.
+# num_epochs = 4
+# step_size_list = [1, 0.1, 0.01, 0.001]
+# assert len(step_size_list) == num_epochs
+# epoch_length = 50
+
 
 def prediction(parameters, x):
     A1, b1, A0, b0 = parameters
@@ -174,26 +202,22 @@ def quasi_projected_gradient(parameters, xs, ys, ws):
     assert xs.ndim == 2 and ys.ndim == 2
     grad = gradient(parameters, xs, ys)
     sample_size = xs.shape[1]
-    # system, transform, basis_dimension = basis(parameters)
-    # bs = transform @ system(xs)
-    # assert bs.shape == (basis_dimension, sample_size)
-    # assert grad.shape == (output_dimension, sample_size) and output_dimension == 1
-    # qs = bs * ws @ grad[0] / sample_size
-    # qs = transform.T @ qs
-    # We can implement this even more efficiently.
-    # Consider M_jk := (system[j], system[k])_{L2} and b_j := (system[j], grad)_{L2}.
-    # Then the L2 projection qs of grad onto the space spanned by system solves the equation
-    # M @ qs = b
-    # In the NGD with estimated gradient (the projected_gradient() function),
-    # M and b are estimated from samples. Here, M is computed explicitly as M = gram and only b is computed from samples.
+    # Consider M_{jk} := (system[j], system[k])_{L2} and b_j := (system[j], grad)_{L2}.
+    # Then the L2 projection (qs) of grad onto the space spanned by system solves the equation
+    #     M @ qs = b .
+    # In the projected_gradient(...) function both M and b are estimated from samples.
+    # Here, M is computed explicitly as M = gramian(...) and only b is estimated from samples.
     # This ensures that qs = inv(M) @ b remains unbiased.
-    # However, currently we compute the spectral decomposition M = U Λ U^T and define transform = Λ^{-1/2} U^T.
-    # This means that qs = transform.T @ (transform @ b). Note that transform @ b is precisely the first qs above.
-    # Hence, we could define qs more easily as
     assert grad.shape == (output_dimension, sample_size) and output_dimension == 1
     system = generating_system(parameters, fd=finite_difference)
     gram = gramian(system, n=1_000)
-    qs, *_ = jnp.linalg.lstsq(gram, system(xs) * ws @ grad[0] / sample_size)
+    qs = system(xs) * ws @ grad[0] / sample_size
+    # NOTE: By Leibniz integral rule, the preceding line is equivalent to
+    # qs = jnp.concatenate([p.ravel() for p in jax.grad(loss)(parameters, xs, ys, ws)])
+    # NOTE: This indeed holds for all sufficiently regular functions.
+    #       This means that the quasi-projection algorithm is EXACTLY equivalent to NGD for L2,
+    #       when the update is performed by utilising Taylors theorem.
+    qs, *_ = jnp.linalg.lstsq(gram, qs)
     return devectorised_parameters(qs)
 
 
@@ -214,9 +238,13 @@ def projected_gradient(parameters, xs, ys, ws):
 
 # @jax.jit
 def updated_parameters(parameters, xs, ys, ws, step_size):
-    # gradients = jax.grad(loss)(parameters, xs, ys, ws)
-    gradients = quasi_projected_gradient(parameters, xs, ys, ws)
-    # gradients = projected_gradient(parameters, xs, ys, ws)
+    if method == "SGD":
+        gradients = jax.grad(loss)(parameters, xs, ys, ws)
+    elif method == "NGD_quasi_projection":
+        gradients = quasi_projected_gradient(parameters, xs, ys, ws)
+    else:
+        assert method == "NGD_projection"
+        gradients = projected_gradient(parameters, xs, ys, ws)
     system = generating_system(parameters, fd=finite_difference)
     gram = gramian(system, n=1_000)
     vectorised_parameters = lambda ps: jnp.concatenate([p.ravel() for p in ps])  # TODO: Make uniform...
@@ -241,12 +269,11 @@ assert input_dimension == 1
 xs = jnp.linspace(0, 1, 1000).reshape(1, 1000)
 ws = jnp.ones((1000,))
 ys = target(xs)
-def plot_state(title=""):
+def plot_state(title):
     plt.plot(xs[0], ys[0], "k-", lw=2)
     zs = prediction(parameters, xs)
     plt.plot(xs[0], zs[0], "k--", lw=2)
     system, transform, basis_dimension = basis(parameters)
-    # for bs in system(xs):
     ks = 0
     for bs in transform @ system(xs):
         plt.plot(xs[0], bs, lw=1)
@@ -254,9 +281,7 @@ def plot_state(title=""):
         ks += bs**2
     ks /= basis_dimension
     plt.plot(xs[0], ks, "-", color="tab:red", lw=2)
-    if len(title) > 0:
-        title = title + "  |  "
-    plt.title(title + f"Basis dimension: {basis_dimension}")
+    plt.title(title)
     plt.show()
 
 
@@ -294,51 +319,61 @@ def optimal_sampling_density(parameters):
 # exit()
 
 
-sample_size = 10
-# sample_size = 300
-num_epochs = 10
-# NOTE: The following step size is too large and yields convergence to a suboptimal stationary point.
-# step_size = 0.1
-step_size = 0.01
-epoch_length = 100
-# NOTE: Apparently, 1e-6 is the approximation error in this model class,
-#       since a smaller step size yields the same error.
-# step_size = 0.001
-# epoch_length = 1_000
-# NOTE: An intuitive idea is thus to use a step size schedule.
-#       But, interestingly, the GD converges to a suboptimal stationary point,
-#       which can not be escaped when the step size is reduced in later epochs.
-# num_epochs = 4
-# step_size_list = [1, 0.1, 0.01, 0.001]
-# assert len(step_size_list) == num_epochs
-# epoch_length = 50
 
-plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}")
+*_, basis_dimension = basis(parameters)
+plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}  |  Basis dimension: {basis_dimension}")
 # exit()
 losses = []
 gradients = []
 for epoch in range(num_epochs):
-    # step_size = step_size_list[epoch]
     for step in range(epoch_length):
-        total_step = epoch * epoch_length + step
-        limit_epoch = 4
-        limit_total_step = limit_epoch * epoch_length
-        if epoch >= limit_epoch:
-            # step_size /= 10
-            step_size = step_size / jnp.sqrt(step - limit_total_step + 1)
+        if step_size_rule == "constant":
+            step_size = init_step_size
+        elif step_size_rule == "constant_epoch":
+            step_size = init_step_size / 10 ** max(epoch - limit_epoch + 1, 0)
+        else:
+            assert step_size_rule == "decreasing"
+            total_step = epoch * epoch_length + step
+            limit_total_step = limit_epoch * epoch_length
+            relative_step = max(total_step - limit_total_step, 0)
+            step_size = init_step_size / jnp.sqrt(relative_step + 1)
         losses.append(loss(parameters, xs, ys, ws))
         training_key, key = jax.random.split(key, 2)
-        osd = optimal_sampling_density(parameters)
         assert input_dimension == 1
-        xs_train = jax.random.choice(training_key, xs[0], (sample_size,), replace=False, p=osd(xs))[None]
-        ws_train = 1 / osd(xs_train)
-        # xs_train = jax.random.uniform(training_key, (input_dimension, sample_size), minval=0, maxval=1)
-        # ws_train = jnp.ones((sample_size,))
+        if sampling == "uniform":
+            xs_train = jax.random.uniform(training_key, (input_dimension, sample_size), minval=0, maxval=1)
+            ws_train = jnp.ones((sample_size,))
+        else:
+            assert sampling == "optimal"
+            osd = optimal_sampling_density(parameters)
+            xs_train = jax.random.choice(training_key, xs[0], (sample_size,), replace=False, p=osd(xs))[None]
+            ws_train = 1 / osd(xs_train)
         ys_train = target(xs_train)
-        parameters, gradient_norm = updated_parameters(parameters, xs_train, ys_train, ws_train, step_size)
+
+        if losses[-1] < 1 / xs.shape[1]:
+            new_size = - int(jnp.floor(jnp.log10(losses[-1] / 2)))
+            xs = jnp.linspace(0, 1, new_size).reshape(1, new_size)
+            ws = jnp.ones((new_size,))
+            ys = target(xs)
+        system = generating_system(parameters)
+        grad = gradient(parameters, xs, ys)
+        grad = jnp.trapz(system(xs) * ws * grad[0], xs, axis=1)
+        gram = gramian(system, n=xs.shape[1])
+        basis_dimension = jnp.linalg.matrix_rank(gram)
+        gradient_norm = jnp.sqrt(squared_l2_norm(grad, gram))
         gradients.append(gradient_norm)
-        print(f"[{epoch+1:{len(str(num_epochs))}d} | {step+1:{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Gradient norm: {gradient_norm:.2e}")
-    plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}  |  Gradient norm: {latex_float(gradient_norm, places=2)}")
+        parameters, _ = updated_parameters(parameters, xs_train, ys_train, ws_train, step_size)
+
+        # parameters, gradient_norm = updated_parameters(parameters, xs_train, ys_train, ws_train, step_size)
+        # gradients.append(gradient_norm)
+        # NOTE: The gradient norm is not a valid indicator of a stationary point,
+        #       since it is the L2 norm of the estimated projected gradient.
+        #       This estiamte may not be zero even though the true projected gradient is.
+        # *_, basis_dimension = basis(parameters)
+        print(f"[{epoch+1:{len(str(num_epochs))}d} | {step+1:{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Gradient norm: {gradient_norm:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}")
+    # plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
+plot_state(f"Termination  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
+
 
 fig, ax = plt.subplots(1, 2)
 ax[0].plot(xs[0], ys[0], "k-", lw=2)
