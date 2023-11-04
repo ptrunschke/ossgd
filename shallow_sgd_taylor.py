@@ -122,14 +122,47 @@ def gramian(evaluate_basis, n=1_000):
     return jsp.integrate.trapezoid(measures[:, :, None] * measures[:, None, :], xs[0], axis=0)
 
 
-def basis(parameters, n=1_000):
-    system = generating_system(parameters, fd=finite_difference)
+def squared_l2_norm(coefficients, gram):
+    return coefficients @ gram @ coefficients
+
+
+def basis_transform(system, n=1_000):
     gram = gramian(system, n=n)
     r = jnp.linalg.matrix_rank(gram)
     s, V = jnp.linalg.eigh(gram)
-    s, V = s[-r:], V[:, -r:]
-    X = V / jnp.sqrt(s)
-    return system, X.T, r
+    return s[::-1], V.T[::-1], r
+
+
+def basis(parameters, n=1_000):
+    system = generating_system(parameters, fd=finite_difference)
+    s, Vt, r = basis_transform(system)
+    s, Vt = s[:r], Vt[:r]
+    X = Vt / jnp.sqrt(s)[:, None]
+    return system, X, r
+
+
+# def basis_old(parameters, n=1_000):
+#     system = generating_system(parameters, fd=finite_difference)
+#     gram = gramian(system, n=n)
+#     r = jnp.linalg.matrix_rank(gram)
+#     s, V = jnp.linalg.eigh(gram)
+#     s, V = s[-r:], V[:, -r:]
+#     X = V / jnp.sqrt(s)
+#     return system, X.T, r
+#
+#
+# assert input_dimension == 1
+# xs = jnp.linspace(0, 1, 1000).reshape(1, 1000)
+# system, transform, basis_dimension = basis_old(parameters)
+# fig, ax = plt.subplots(2, int(jnp.ceil(basis_dimension / 2)))
+# ax = ax.ravel()
+# for i, bs in enumerate(transform @ system(xs)):
+#     ax[i].plot(xs[0], bs)
+# system, transform, basis_dimension = basis(parameters)
+# for i, bs in enumerate(reversed(transform @ system(xs))):
+#     ax[i].plot(xs[0], bs, "--")
+# plt.show()
+# exit()
 
 
 def gradient(parameters, xs, ys):
@@ -137,15 +170,45 @@ def gradient(parameters, xs, ys):
 
 
 def quasi_projected_gradient(parameters, xs, ys, ws):
+    # === NGD with true Gramian ===
     assert xs.ndim == 2 and ys.ndim == 2
     grad = gradient(parameters, xs, ys)
     sample_size = xs.shape[1]
-    system, transform, basis_dimension = basis(parameters)
-    bs = transform @ system(xs)
-    assert bs.shape == (basis_dimension, sample_size)
+    # system, transform, basis_dimension = basis(parameters)
+    # bs = transform @ system(xs)
+    # assert bs.shape == (basis_dimension, sample_size)
+    # assert grad.shape == (output_dimension, sample_size) and output_dimension == 1
+    # qs = bs * ws @ grad[0] / sample_size
+    # qs = transform.T @ qs
+    # We can implement this even more efficiently.
+    # Consider M_jk := (system[j], system[k])_{L2} and b_j := (system[j], grad)_{L2}.
+    # Then the L2 projection qs of grad onto the space spanned by system solves the equation
+    # M @ qs = b
+    # In the NGD with estimated gradient (the projected_gradient() function),
+    # M and b are estimated from samples. Here, M is computed explicitly as M = gram and only b is computed from samples.
+    # This ensures that qs = inv(M) @ b remains unbiased.
+    # However, currently we compute the spectral decomposition M = U Λ U^T and define transform = Λ^{-1/2} U^T.
+    # This means that qs = transform.T @ (transform @ b). Note that transform @ b is precisely the first qs above.
+    # Hence, we could define qs more easily as
     assert grad.shape == (output_dimension, sample_size) and output_dimension == 1
-    qs = bs * ws @ grad[0] / sample_size
-    qs = transform.T @ qs
+    system = generating_system(parameters, fd=finite_difference)
+    gram = gramian(system, n=1_000)
+    qs, *_ = jnp.linalg.lstsq(gram, system(xs) * ws @ grad[0] / sample_size)
+    return devectorised_parameters(qs)
+
+
+def projected_gradient(parameters, xs, ys, ws):
+    # === NGD with estimated Gramian ===
+    assert xs.ndim == 2 and ys.ndim == 2
+    sample_size = xs.shape[1]
+    grad = gradient(parameters, xs, ys)
+    assert grad.shape == (output_dimension, sample_size) and output_dimension == 1
+    system, transform, basis_dimension = basis(parameters)
+    measures = system(xs)
+    assert measures.shape == (num_parameters, sample_size)
+    qs, *_ = jnp.linalg.lstsq((measures * ws).T, grad[0] * ws)
+    # emp_gram = system(xs) * ws @ system(xs).T
+    # print(f"    Stability: {jnp.linalg.norm(emp_gram - jnp.eye(num_parameters))}")
     return devectorised_parameters(qs)
 
 
@@ -153,7 +216,13 @@ def quasi_projected_gradient(parameters, xs, ys, ws):
 def updated_parameters(parameters, xs, ys, ws, step_size):
     # gradients = jax.grad(loss)(parameters, xs, ys, ws)
     gradients = quasi_projected_gradient(parameters, xs, ys, ws)
-    return [θ - step_size * dθ for (θ, dθ) in zip(parameters, gradients)]
+    # gradients = projected_gradient(parameters, xs, ys, ws)
+    system = generating_system(parameters, fd=finite_difference)
+    gram = gramian(system, n=1_000)
+    vectorised_parameters = lambda ps: jnp.concatenate([p.ravel() for p in ps])  # TODO: Make uniform...
+    gradient_norm = jnp.sqrt(squared_l2_norm(vectorised_parameters(gradients), gram))
+    return [θ - step_size * dθ for (θ, dθ) in zip(parameters, gradients)], gradient_norm
+
 
 # TODO: compute curvature at every step
 # def hessian(f):
@@ -191,6 +260,19 @@ def plot_state(title=""):
     plt.show()
 
 
+def latex_float(value, places=2):
+    assert places > 0
+    if jnp.isnan(value):
+        return r"$\mathrm{NaN}$"
+    s = "-" * int(value < 0)  # sign
+    x = abs(value)
+    m = f"{x:.{places}e}"  # mantissa
+    assert m[2 + places : 4 + places] in ["e+", "e-"]
+    e = int(m[3 + places :])  # exponent
+    m = m[: 2 + places]
+    return fr"${s}{m}\cdot 10^{{{e}}}$"
+
+
 def optimal_sampling_density(parameters):
     system, transform, basis_dimension = basis(parameters)
     def density(xs):
@@ -212,21 +294,9 @@ def optimal_sampling_density(parameters):
 # exit()
 
 
-def latex_float(value, places=2):
-    assert places > 0
-    if jnp.isnan(value):
-        return r"$\mathrm{NaN}$"
-    s = "-" * int(value < 0)  # sign
-    x = abs(value)
-    m = f"{x:.{places}e}"  # mantissa
-    assert m[2 + places : 4 + places] in ["e+", "e-"]
-    e = int(m[3 + places :])  # exponent
-    m = m[: 2 + places]
-    return fr"${s}{m}\cdot 10^{{{e}}}$"
-
-
 sample_size = 10
-num_epochs = 5
+# sample_size = 300
+num_epochs = 10
 # NOTE: The following step size is too large and yields convergence to a suboptimal stationary point.
 # step_size = 0.1
 step_size = 0.01
@@ -246,15 +316,17 @@ epoch_length = 100
 plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}")
 # exit()
 losses = []
+gradients = []
 for epoch in range(num_epochs):
     # step_size = step_size_list[epoch]
     for step in range(epoch_length):
-        # total_step = epoch * epoch_length + step
-        # limit_total_step = 4_000
-        # if total_step > limit_total_step:
-        #     step_size = step_size / jnp.sqrt(step - limit_total_step)
+        total_step = epoch * epoch_length + step
+        limit_epoch = 4
+        limit_total_step = limit_epoch * epoch_length
+        if epoch >= limit_epoch:
+            # step_size /= 10
+            step_size = step_size / jnp.sqrt(step - limit_total_step + 1)
         losses.append(loss(parameters, xs, ys, ws))
-        print(f"[{epoch+1:{len(str(num_epochs))}d} | {step+1:{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}")
         training_key, key = jax.random.split(key, 2)
         osd = optimal_sampling_density(parameters)
         assert input_dimension == 1
@@ -263,14 +335,18 @@ for epoch in range(num_epochs):
         # xs_train = jax.random.uniform(training_key, (input_dimension, sample_size), minval=0, maxval=1)
         # ws_train = jnp.ones((sample_size,))
         ys_train = target(xs_train)
-        parameters = updated_parameters(parameters, xs_train, ys_train, ws_train, step_size)
-    plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}")
+        parameters, gradient_norm = updated_parameters(parameters, xs_train, ys_train, ws_train, step_size)
+        gradients.append(gradient_norm)
+        print(f"[{epoch+1:{len(str(num_epochs))}d} | {step+1:{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Gradient norm: {gradient_norm:.2e}")
+    plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}  |  Gradient norm: {latex_float(gradient_norm, places=2)}")
 
 fig, ax = plt.subplots(1, 2)
 ax[0].plot(xs[0], ys[0], "k-", lw=2)
 zs = prediction(parameters, xs)
 ax[0].plot(xs[0], zs[0], "k--", lw=2)
-ax[1].plot(losses)
+ax[1].plot(gradients, color="tab:green", label="Gradient norm")
+ax[1].plot(losses, color="tab:blue", label="Loss")
+ax[1].legend(loc="upper right")
 ax[1].set_xscale("log")
 ax[1].set_yscale("log")
 plt.show()
