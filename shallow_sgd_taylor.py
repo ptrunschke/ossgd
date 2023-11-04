@@ -57,8 +57,8 @@ parameters = random_parameters(parameters_key)
 assert sum(p.size for p in parameters) == num_parameters
 
 
-def loss(parameters, xs, ys):
-    return 0.5 * jnp.mean((prediction(parameters, xs) - ys)**2)
+def loss(parameters, xs, ys, ws):
+    return 0.5 * jnp.mean(ws * (prediction(parameters, xs) - ys)**2)
 
 
 def vectorised_parameters(parameters):
@@ -151,7 +151,7 @@ def quasi_projected_gradient(parameters, xs, ys, ws):
 
 # @jax.jit
 def updated_parameters(parameters, xs, ys, ws, step_size):
-    # gradients = jax.grad(loss)(parameters, xs, ys)
+    # gradients = jax.grad(loss)(parameters, xs, ys, ws)
     gradients = quasi_projected_gradient(parameters, xs, ys, ws)
     return [θ - step_size * dθ for (θ, dθ) in zip(parameters, gradients)]
 
@@ -170,6 +170,7 @@ def updated_parameters(parameters, xs, ys, ws, step_size):
 
 assert input_dimension == 1
 xs = jnp.linspace(0, 1, 1000).reshape(1, 1000)
+ws = jnp.ones((1000,))
 ys = target(xs)
 def plot_state(title=""):
     plt.plot(xs[0], ys[0], "k-", lw=2)
@@ -204,7 +205,7 @@ def optimal_sampling_density(parameters):
 
 # ks = optimal_sampling_density(parameters)(xs)
 # ks_mass = jsp.integrate.trapezoid(ks, xs[0])
-# assert jnp.isclose(ks_mass, 1)
+# assert jnp.isclose(ks_mass, 1, atol=1 / xs.shape[1])
 # plt.plot(xs[0], ks)
 # plt.title("Optimal sampling density")
 # plt.show()
@@ -242,7 +243,7 @@ epoch_length = 100
 # assert len(step_size_list) == num_epochs
 # epoch_length = 50
 
-plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys), places=2)}")
+plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}")
 # exit()
 losses = []
 for epoch in range(num_epochs):
@@ -252,7 +253,7 @@ for epoch in range(num_epochs):
         # limit_total_step = 4_000
         # if total_step > limit_total_step:
         #     step_size = step_size / jnp.sqrt(step - limit_total_step)
-        losses.append(loss(parameters, xs, ys))
+        losses.append(loss(parameters, xs, ys, ws))
         print(f"[{epoch+1:{len(str(num_epochs))}d} | {step+1:{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}")
         training_key, key = jax.random.split(key, 2)
         osd = optimal_sampling_density(parameters)
