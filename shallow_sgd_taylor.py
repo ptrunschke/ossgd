@@ -5,60 +5,218 @@ import jax.scipy as jsp
 import matplotlib.pyplot as plt
 
 
+# # ====================
+# #     Experiment 1
+# # ====================
 # target = lambda x: jnp.sin(2 * jnp.pi * x)
+# input_dimension = 1
+# width = 10
+# output_dimension = 1
+# # NOTE: Using a larger width means that the approximation error is smaller.
+# #       But we observe that with the previously well-chosen step size 0.01,
+# #       the parameters converge to a suboptimal stationary point (loss: 1e-1),
+# #       which chould also be achieved with width 10 (basis dimension == 3).
+# #       Actually, not even width 10 achieves a global minimum,
+# #       since the tangent space at the stationary point is still 7-dimensional.
+# # TODO: Uncomment the following line to perform this experiment.
+# # width = 100
+# activation = lambda x: (jnp.tanh(x) + 1) / 2
+# finite_difference = 0
+# method = "NGD_quasi_projection"
+# sample_size = 10
+# sampling = "uniform"
+# num_epochs = 10
+# epoch_length = 100
+# step_size_rule = "constant"
+# init_step_size = 0.01
+
+
+# TODO: Switch the two experiments.
+
+
+# # ====================
+# # Experiment 2
+# # ====================
+# target = lambda x: jnp.sin(2 * jnp.pi * x)
+# input_dimension = 1
+# width = 10
+# output_dimension = 1
+# activation = lambda x: (jnp.tanh(x) + 1) / 2
+# finite_difference = 0
+# method = "NGD_quasi_projection"
+# sample_size = 10
+# sampling = "uniform"
+# num_epochs = 10
+# epoch_length = 100
+# step_size_rule = "constant"
+# init_step_size = 0.01
+# # TODO: Do this as a first experiemnt. Then do teh following:
+# # NOTE: The following step size is too large and yields convergence to a suboptimal stationary point.
+# # init_step_size = 0.1
+# # NOTE: In the preceding experiment, we have seen that that ... converges to an error of about 1e-6.
+# #       This is a stationary point in this model class, which can be seen by choosing an even smaller step size,
+# #       which still yields the same error.
+# # TODO: Uncomment the following line to perform this experiment.
+# # init_step_size = 0.001
+# # NOTE: An intuitive idea is thus to use a decreasing step size after the first few iterations.
+# #       But, interestingly, the GD converges to a suboptimal stationary point in these first iterations
+# #       and can not escape this point when the step size is reduced in later.
+# # TODO: Uncomment the following line to perform this experiment.
+# # init_step_size = 0.1
+# # step_size_rule = "decreasing"
+# # limit_epoch = 7
+
+
+# # ====================
+# # Experiment 3
+# # ====================
+# # NOTE: In the preceding experiments, we have seen that the basis functions of the tanh-activation
+# #       look like polynomials of bounded degree. Consequently, the optimal sampling density looks
+# #       very similar to the Legendre case. But this happens due to the random initialisation
+# #       and only remains during the optimisation for the smooth sin target.
+# #       For the step function target, the optimal density becomes more and more peaky around the jump point.
+# target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
+# input_dimension = 1
+# width = 10
+# output_dimension = 1
+# activation = lambda x: (jnp.tanh(x) + 1) / 2
+# finite_difference = 0
+# method = "NGD_quasi_projection"
+# sample_size = 300
+# sampling = "uniform"
+# num_epochs = 15
+# step_size_rule = "decreasing"
+# limit_epoch = 7
+# init_step_size = 0.01
+# epoch_length = 100
+
+
+# ====================
+# Experiment 4
+# ====================
 target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
-
-
 input_dimension = 1
 width = 10
-# NOTE: All sample size and epoch lenght parameters below are chosen for a width of 10.
-#       Using a larger width means that the approximation error is smaller.
-#       But we observe that with the previously well-chosen step size 0.01,
-#       the parameters converge to a suboptimal stationary point (loss: 1e-1),
-#       which chould also be achieved with width 10 (basis dimension == 3).
-# NOTE: Actually, not even width 10 achieves a global minimum,
-#       since the tangent space at the stationary point is still 7-dimensional.
-# width = 100
 output_dimension = 1
-num_parameters = output_dimension + output_dimension * width + width + width * input_dimension
 activation = lambda x: (jnp.tanh(x) + 1) / 2
-# NOTE: Interestingly, the basis functions of the tanh-activation look like polynomials of bounded degree.
-#       Consequently, the optimal sampling density looks very similar to the Legendre case.
-# NOTE: But this happens due to the random initialisation and only remains during the optimisation for the smooth sin target.
-#       For the step function target, the optimal density becomes more and more peaky around the jump point.
-# activation = lambda x: 1 / (1 + jnp.exp(-x))
-# activation = lambda x: jnp.maximum(x, 0)
-
-# finite_difference = 0
-finite_difference = 0.01
-
-# method = "SGD"
+finite_difference = 0
 method = "NGD_quasi_projection"
-# method = "NGD_projection"
-# sample_size = 10
 sample_size = 300
 sampling = "uniform"
-# sampling = "optimal"
 num_epochs = 15
-# NOTE: The following step size is too large and yields convergence to a suboptimal stationary point.
-# step_size_rule = "constant"
-# step_size_rule = "constant_epochs"
 step_size_rule = "decreasing"
-limit_epoch = 7
-# init_step_size = 0.1
-init_step_size = 0.01
+limit_epoch = 2
+# NOTE: We can use a larger initial step size.
+init_step_size = 1
 epoch_length = 100
-# NOTE: Apparently, 1e-6 is the approximation error in this model class,
-#       since a smaller step size yields the same error.
-# step_size = 0.001
-# epoch_length = 1_000
-# NOTE: An intuitive idea is thus to use a step size schedule.
-#       But, interestingly, the GD converges to a suboptimal stationary point,
-#       which can not be escaped when the step size is reduced in later epochs.
-# num_epochs = 4
-# step_size_list = [1, 0.1, 0.01, 0.001]
-# assert len(step_size_list) == num_epochs
-# epoch_length = 50
+
+
+# TODO: Add an experiment that shows that SGD with 300 samples is worse than the new NGD!
+
+
+# ====================
+# Experiment 5
+# ====================
+# NOTE: Annoyingly, as we have already seen above, there exist many local minima and if we use optimal sampling, we just get stuck in a very bad one.
+# This means that it is not easy to compare how fast we converge with uniform vs optimal sampling, since we converge to different points.
+# TODO: This makes it extremely difficult to compare two algorihtms!
+target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
+input_dimension = 1
+width = 10
+output_dimension = 1
+activation = lambda x: (jnp.tanh(x) + 1) / 2
+finite_difference = 0
+method = "NGD_quasi_projection"
+sample_size = 300
+sampling = "optimal"
+num_epochs = 15
+step_size_rule = "decreasing"
+limit_epoch = 2
+init_step_size = 1
+epoch_length = 100
+
+
+# ====================
+# Experiment 6
+# ====================
+# NOTE: Here we try what happens when we use optimal sampling instead.
+target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
+input_dimension = 1
+width = 10
+output_dimension = 1
+activation = lambda x: (jnp.tanh(x) + 1) / 2
+finite_difference = 0
+method = "NGD_quasi_projection"
+sample_size = 1
+sampling = "optimal"
+num_epochs = 15
+step_size_rule = "decreasing"
+limit_epoch = 0
+init_step_size = 1
+epoch_length = 100
+
+
+# ======================
+#     Old parameters
+# ======================
+
+
+# # target = lambda x: jnp.sin(2 * jnp.pi * x)
+# target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
+
+
+# input_dimension = 1
+# width = 10
+# # NOTE: All sample size and epoch lenght parameters below are chosen for a width of 10.
+# #       Using a larger width means that the approximation error is smaller.
+# #       But we observe that with the previously well-chosen step size 0.01,
+# #       the parameters converge to a suboptimal stationary point (loss: 1e-1),
+# #       which chould also be achieved with width 10 (basis dimension == 3).
+# # NOTE: Actually, not even width 10 achieves a global minimum,
+# #       since the tangent space at the stationary point is still 7-dimensional.
+# # width = 100
+# output_dimension = 1
+# activation = lambda x: (jnp.tanh(x) + 1) / 2
+# # NOTE: Interestingly, the basis functions of the tanh-activation look like polynomials of bounded degree.
+# #       Consequently, the optimal sampling density looks very similar to the Legendre case.
+# # NOTE: But this happens due to the random initialisation and only remains during the optimisation for the smooth sin target.
+# #       For the step function target, the optimal density becomes more and more peaky around the jump point.
+# # activation = lambda x: 1 / (1 + jnp.exp(-x))
+# # activation = lambda x: jnp.maximum(x, 0)
+
+# # finite_difference = 0
+# finite_difference = 0.01
+
+# # method = "SGD"
+# method = "NGD_quasi_projection"
+# # method = "NGD_projection"
+# # sample_size = 10
+# sample_size = 300
+# sampling = "uniform"
+# # sampling = "optimal"
+# num_epochs = 15
+# # NOTE: The following step size is too large and yields convergence to a suboptimal stationary point.
+# # step_size_rule = "constant"
+# # step_size_rule = "constant_epochs"
+# step_size_rule = "decreasing"
+# limit_epoch = 7
+# # init_step_size = 0.1
+# init_step_size = 0.01
+# epoch_length = 100
+# # NOTE: Apparently, 1e-6 is the approximation error in this model class,
+# #       since a smaller step size yields the same error.
+# # step_size = 0.001
+# # epoch_length = 1_000
+# # NOTE: An intuitive idea is thus to use a step size schedule.
+# #       But, interestingly, the GD converges to a suboptimal stationary point,
+# #       which can not be escaped when the step size is reduced in later epochs.
+# # num_epochs = 4
+# # step_size_list = [1, 0.1, 0.01, 0.001]
+# # assert len(step_size_list) == num_epochs
+# # epoch_length = 50
+
+
+num_parameters = output_dimension + output_dimension * width + width + width * input_dimension
 
 
 def prediction(parameters, x):
@@ -311,6 +469,7 @@ plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys, ws),
 # exit()
 losses = []
 gradients = []
+variation_constants = []
 for epoch in range(num_epochs):
     for step in range(epoch_length):
         if step_size_rule == "constant":
@@ -326,18 +485,20 @@ for epoch in range(num_epochs):
         losses.append(loss(parameters, xs, ys, ws))
         training_key, key = jax.random.split(key, 2)
         assert input_dimension == 1
+        osd = optimal_sampling_density(parameters)
+        ps = osd(xs)
         if sampling == "uniform":
             xs_train = jax.random.uniform(training_key, (input_dimension, sample_size), minval=0, maxval=1)
             ws_train = jnp.ones((sample_size,))
         else:
             assert sampling == "optimal"
-            osd = optimal_sampling_density(parameters)
-            xs_train = jax.random.choice(training_key, xs[0], (sample_size,), replace=False, p=osd(xs))[None]
+            xs_train = jax.random.choice(training_key, xs[0], (sample_size,), replace=False, p=ps)[None]
             ws_train = 1 / osd(xs_train)
         ys_train = target(xs_train)
 
-        if losses[-1] < 1 / xs.shape[1]:
-            new_size = - int(jnp.floor(jnp.log10(losses[-1] / 2)))
+        if losses[-1] / 2 <= 1 / xs.shape[1]:
+            new_size = 10**(-int(jnp.floor(jnp.log10(losses[-1] / 2))))
+            assert new_size > xs.shape[1]
             xs = jnp.linspace(0, 1, new_size).reshape(1, new_size)
             ws = jnp.ones((new_size,))
             ys = target(xs)
@@ -352,6 +513,7 @@ for epoch in range(num_epochs):
         # NOTE: The gradient norm returned by updated_parameters(...) is not a valid indicator of a stationary point,
         #       since it is the L2 norm of the estimated projected gradient.
         #       This estiamte may not be zero even though the true projected gradient is.
+        variation_constants.append(jnp.max(ps * basis_dimension))
         print(f"[{epoch+1:{len(str(num_epochs))}d} | {step+1:{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Gradient norm: {gradient_norm:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}")
     # plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
 plot_state(f"Termination  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
@@ -361,8 +523,9 @@ fig, ax = plt.subplots(1, 2)
 ax[0].plot(xs[0], ys[0], "k-", lw=2)
 zs = prediction(parameters, xs)
 ax[0].plot(xs[0], zs[0], "k--", lw=2)
-ax[1].plot(gradients, color="tab:green", label="Gradient norm")
+ax[1].plot(gradients, color="tab:green", lw=1, alpha=0.5, label="Gradient norm")
 ax[1].plot(losses, color="tab:blue", label="Loss")
+ax[1].plot(variation_constants, color="tab:red", label=r"$\|\mathfrak{K}\|_{L^\infty}$")
 ax[1].legend(loc="upper right")
 ax[1].set_xscale("log")
 ax[1].set_yscale("log")
