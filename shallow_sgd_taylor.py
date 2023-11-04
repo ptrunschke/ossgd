@@ -214,7 +214,7 @@ def quasi_projected_gradient(parameters, xs, ys, ws):
     qs = system(xs) * ws @ grad[0] / sample_size
     # NOTE: By Leibniz integral rule, the preceding line is equivalent to
     # qs = jnp.concatenate([p.ravel() for p in jax.grad(loss)(parameters, xs, ys, ws)])
-    # NOTE: This indeed holds for all sufficiently regular functions.
+    # NOTE: This indeed holds for all sufficiently regular loss functions.
     #       This means that the quasi-projection algorithm is EXACTLY equivalent to NGD for L2,
     #       when the update is performed by utilising Taylors theorem.
     qs, *_ = jnp.linalg.lstsq(gram, qs)
@@ -250,19 +250,6 @@ def updated_parameters(parameters, xs, ys, ws, step_size):
     vectorised_parameters = lambda ps: jnp.concatenate([p.ravel() for p in ps])  # TODO: Make uniform...
     gradient_norm = jnp.sqrt(squared_l2_norm(vectorised_parameters(gradients), gram))
     return [θ - step_size * dθ for (θ, dθ) in zip(parameters, gradients)], gradient_norm
-
-
-# TODO: compute curvature at every step
-# def hessian(f):
-#     return jax.jacfwd(jax.jacrev(f))
-# H = hessian(f)(W)
-# print("hessian, with shape", H.shape)
-# print(H)
-# If f : R^n -> R^m then
-# - f(x) in R^m  (value)
-# - df(x) in R^{m * n}  (Jacobian)
-# - d^2f(x) in R^{m * n * n}  (Hessian)
-# TODO: instead of having a list of parameters, have one long parameter vector --> makes it easier to think about...
 
 
 assert input_dimension == 1
@@ -319,7 +306,6 @@ def optimal_sampling_density(parameters):
 # exit()
 
 
-
 *_, basis_dimension = basis(parameters)
 plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}  |  Basis dimension: {basis_dimension}")
 # exit()
@@ -363,13 +349,9 @@ for epoch in range(num_epochs):
         gradient_norm = jnp.sqrt(squared_l2_norm(grad, gram))
         gradients.append(gradient_norm)
         parameters, _ = updated_parameters(parameters, xs_train, ys_train, ws_train, step_size)
-
-        # parameters, gradient_norm = updated_parameters(parameters, xs_train, ys_train, ws_train, step_size)
-        # gradients.append(gradient_norm)
-        # NOTE: The gradient norm is not a valid indicator of a stationary point,
+        # NOTE: The gradient norm returned by updated_parameters(...) is not a valid indicator of a stationary point,
         #       since it is the L2 norm of the estimated projected gradient.
         #       This estiamte may not be zero even though the true projected gradient is.
-        # *_, basis_dimension = basis(parameters)
         print(f"[{epoch+1:{len(str(num_epochs))}d} | {step+1:{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Gradient norm: {gradient_norm:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}")
     # plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
 plot_state(f"Termination  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
