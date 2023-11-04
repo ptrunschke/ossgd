@@ -5,7 +5,8 @@ import jax.scipy as jsp
 import matplotlib.pyplot as plt
 
 
-target = lambda x: jnp.sin(2 * jnp.pi * x)
+# target = lambda x: jnp.sin(2 * jnp.pi * x)
+target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
 
 
 input_dimension = 1
@@ -22,6 +23,9 @@ output_dimension = 1
 num_parameters = output_dimension + output_dimension * width + width + width * input_dimension
 activation = lambda x: (jnp.tanh(x) + 1) / 2
 # NOTE: Interestingly, the basis functions of the tanh-activation look like polynomials of bounded degree.
+#       Consequently, the optimal sampling density looks very similar to the Legendre case.
+# NOTE: But this happens due to the random initialisation and only remains during the optimisation for the smooth sin target.
+#       For the step function target, the optimal density becomes more and more peaky around the jump point.
 # activation = lambda x: 1 / (1 + jnp.exp(-x))
 # activation = lambda x: jnp.maximum(x, 0)
 
@@ -178,6 +182,7 @@ def plot_state(title=""):
         plt.plot(xs[0], bs, lw=1)
         assert bs.shape == (xs.shape[1],)
         ks += bs**2
+    ks /= basis_dimension
     plt.plot(xs[0], ks, "-", color="tab:red", lw=2)
     if len(title) > 0:
         title = title + "  |  "
@@ -220,7 +225,7 @@ def latex_float(value, places=2):
 
 
 sample_size = 10
-num_epochs = 10
+num_epochs = 5
 # NOTE: The following step size is too large and yields convergence to a suboptimal stationary point.
 # step_size = 0.1
 step_size = 0.01
@@ -243,8 +248,10 @@ losses = []
 for epoch in range(num_epochs):
     # step_size = step_size_list[epoch]
     for step in range(epoch_length):
-        # if step > 1000:
-        #     step_size = 0.1 / jnp.sqrt(step - 1000)
+        # total_step = epoch * epoch_length + step
+        # limit_total_step = 4_000
+        # if total_step > limit_total_step:
+        #     step_size = step_size / jnp.sqrt(step - limit_total_step)
         losses.append(loss(parameters, xs, ys))
         print(f"[{epoch+1:{len(str(num_epochs))}d} | {step+1:{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}")
         training_key, key = jax.random.split(key, 2)
