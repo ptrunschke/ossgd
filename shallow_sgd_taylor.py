@@ -248,6 +248,9 @@ def generating_system(parameters, fd=0):
                     Phi_variation = prediction(parameters_variation, xs)
                     assert Phi_variation.shape == (output_dimension, xs.shape[1]) and output_dimension == 1
                     system.append((Phi_variation - Phi0) / fd)
+                    # TODO: Do not append (Phi_variation - Phi0) / fd but just Phi_variation.
+                    #       The space that is spanned is the same, but Phi_variation directly has the
+                    #       necessary ridge structure to perform a retraction.
             system = jnp.concatenate(system, axis=0)
             assert system.shape == (num_parameters, xs.shape[1])
             return system
