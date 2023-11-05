@@ -551,18 +551,30 @@ def retract(coefficients, max_dimension=jnp.inf, squared_error_threshold=0):
     return candidate
 
 
-fig, ax = plt.subplots(2, 2)
-ax[0, 0].plot(xs[0], zs[0], "k-", lw=2)
-ax[0, 0].plot(xs[0], coefficients @ measures, "--", lw=1.5, color="tab:red")
-ax[0, 1].stem(coefficients)
-print(f"Max. dimension: {basis_dimension}")
-retracted_coefficients = retract(coefficients, basis_dimension, 1e-3)
-print(f"Used dimension: {jnp.count_nonzero(retracted_coefficients)}")
-ax[1, 0].plot(xs[0], zs[0], "k-", lw=2)
-ax[1, 0].plot(xs[0], retracted_coefficients @ measures, "--", lw=1.5, color="tab:red")
-ax[1, 1].stem(retracted_coefficients)
-plt.show()
-exit()
+# fig, ax = plt.subplots(2, 2)
+# ax[0, 0].plot(xs[0], zs[0], "k-", lw=2)
+# ax[0, 0].plot(xs[0], coefficients @ measures, "--", lw=1.5, color="tab:red")
+# ax[0, 1].stem(coefficients)
+# print(f"Max. dimension: {basis_dimension}")
+# retracted_coefficients = retract(coefficients, basis_dimension, 1e-3)
+# print(f"Used dimension: {jnp.count_nonzero(retracted_coefficients)}")
+# ax[1, 0].plot(xs[0], zs[0], "k-", lw=2)
+# ax[1, 0].plot(xs[0], retracted_coefficients @ measures, "--", lw=1.5, color="tab:red")
+# ax[1, 1].stem(retracted_coefficients)
+# plt.show()
+# exit()
+
+
+# NOTE: If u is the update vector, then we want
+#         0.5 * norm(f - retract(u))**2 <= 0.5 * norm(f - u)**2 + 0.5 * C * norm(u)**2 .
+#       However, with the current retraction, we only obtain
+#         norm(f - retract(u)) <= norm(f - u) + norm(u - retract(u)) <= norm(f - u) + thresholding_error .
+#       Although the thresholding_error can be chosen adaptively (and thus arbitrarily small),
+#       it is not clear to me, how we can achieve the first bound without strong Lipschitz continuity
+#       assumptions on the loss function.
+# NOTE: On the bright side, I think that if we retract back to the same width,
+#       then we can probably argue that the classical curvature bound bound (with C being the curvature) holds.
+#       Then, whenever we stagnate we can adapt the model class by increasing the width with a random kick.
 
 
 *_, basis_dimension = basis(parameters)
