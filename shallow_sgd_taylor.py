@@ -418,6 +418,153 @@ def optimal_sampling_density(parameters):
 # exit()
 
 
+# TODO: compute curvature at every step
+# def hessian(f):
+#     return jax.jacfwd(jax.jacrev(f))
+# H = hessian(f)(W)
+# print("hessian, with shape", H.shape)
+# print(H)
+# If f : R^n -> R^m then
+# - f(x) in R^m  (value)
+# - df(x) in R^{m * n}  (Jacobian)
+# - d^2f(x) in R^{m * n * n}  (Hessian)
+
+
+def embed(parameters):
+    A1, b1 = parameters[:2]
+    coefficients = jnp.zeros((num_parameters,))
+    start, stop = 0, A1.size
+    coefficients = coefficients.at[start:stop].set(A1.ravel())
+    start, stop = stop, stop + b1.size
+    coefficients = coefficients.at[start:stop].set(b1.ravel())
+    return coefficients
+
+
+system = generating_system(parameters, finite_difference)
+s, Vt, basis_dimension = basis_transform(system)
+zs = prediction(parameters, xs)
+coefficients = embed(parameters)
+measures = system(xs)
+assert measures.shape == (num_parameters, xs.shape[1])
+# assert jnp.allclose(coefficients @ measures, zs[0], atol=jnp.finfo(zs.dtype).resolution)
+assert jnp.allclose(coefficients @ measures, zs[0], atol=1e-4)
+
+transform = Vt[:basis_dimension] / jnp.sqrt(s[:basis_dimension, None])
+assert jnp.allclose(transform, jnp.diag(1 / jnp.sqrt(s[:basis_dimension])) @ Vt[:basis_dimension])
+onb_measures = transform @ measures
+assert onb_measures.shape == (basis_dimension, xs.shape[1])
+G = jsp.integrate.trapezoid(onb_measures[:, :, None] * onb_measures.T[None], xs[0], axis=1)
+# assert jnp.allclose(G, jnp.eye(basis_dimension), atol=jnp.finfo(zs.dtype).resolution)
+assert jnp.allclose(G, jnp.eye(basis_dimension), atol=1e-3)
+
+# onb_coefficients, *_ = jnp.linalg.lstsq(transform.T, coefficients)
+basis_dimension += 1
+onb_measures = Vt[:basis_dimension] / jnp.sqrt(s[:basis_dimension, None]) @ measures
+onb_coefficients = jnp.sqrt(s[:basis_dimension]) * (Vt[:basis_dimension] @ coefficients)
+
+# plt.plot(xs[0], zs[0])
+# plt.plot(xs[0], coefficients @ measures, "--")
+# plt.plot(xs[0], onb_coefficients @ onb_measures, "-.")
+# plt.show()
+# exit()
+
+gram = gramian(system, n=1_000)
+
+def greedy_threshold(coefficients):
+    assert coefficients.ndim == 1
+    nonzero_indices = jnp.where(coefficients != 0)[0]
+    errors = []
+    for index in nonzero_indices:
+        candidate = coefficients.at[index].set(0)
+        errors.append(squared_l2_norm(coefficients - candidate, gram))
+    optimal_index = jnp.argmin(jnp.asarray(errors))
+    return coefficients.at[nonzero_indices[optimal_index]].set(0), errors[optimal_index]
+
+# candidate = coefficients
+# error = 0
+# while jnp.linalg.norm(candidate) > 0:
+#     fig, ax = plt.subplots(1, 2)
+#     ax[0].plot(xs[0], zs[0], "k-", lw=2)
+#     ax[0].plot(xs[0], candidate @ measures, "--", lw=1.5, color="tab:red")
+#     ax[1].stem(candidate)
+#     fig.suptitle(f"NNZ: {jnp.count_nonzero(candidate)}  |  L2 error: {latex_float(error)}")
+#     plt.show()
+#     candidate, error = greedy_threshold(candidate)
+# exit()
+
+# TODO: Note that the greedy_threshold is not good for computing the retraction,
+#       since it will just truncate the gradient update away...
+
+import numpy as onp
+from lasso_lars import warnings, LarsState, ConvergenceWarning
+
+
+def greedy_lars_threshold(coefficients, max_dimension):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        coefs = onp.array(coefficients)
+        active = []
+        for _ in range(max_dimension):
+            lars = LarsState(onp.array(gram), coefs)
+            lars.add_index()
+            assert len(lars.active) == 1
+            active.extend(lars.active)
+            # Find candidate that minimises
+            #     |transform @ coefficients - transform @ candidate|_2^2
+            #     == coefficients @ gram @ coefficients - 2 * coefficients @ gram @ candidate + candidate @ gram @ candidate
+            #     <--> coefficients @ gram == gram @ candidate
+            # The constraint on active just reduces this first order optimality system to the corresponding rows.
+            candidate, *_ = jnp.linalg.lstsq(gram[jnp.array(active)][:, jnp.array(active)], coefficients @ gram[:, jnp.array(active)])
+            candidate = jnp.zeros(len(coefficients)).at[jnp.array(active)].set(candidate)
+            yield candidate
+            coefs[active] = 0
+
+
+# for candidate in greedy_lars_threshold(coefficients, jnp.count_nonzero(coefficients)):
+#     active = jnp.nonzero(candidate)[0]
+#     print(active)
+#     error = squared_l2_norm(coefficients - candidate, gram)
+#     fig, ax = plt.subplots(1, 2)
+#     ax[0].plot(xs[0], zs[0], "k-", lw=2)
+#     ax[0].plot(xs[0], candidate @ measures, "--", lw=1.5, color="tab:red")
+#     ax[1].stem(candidate)
+#     fig.suptitle(f"NNZ: {jnp.count_nonzero(candidate)}  |  L2 error: {latex_float(error)}")
+#     plt.show()
+# exit()
+
+
+def retract(coefficients, max_dimension=jnp.inf, squared_error_threshold=0):
+    # candidate = coefficients
+    # while jnp.count_nonzero(candidate) > max_dimension:
+    #     candidate, squared_error = greedy_threshold(candidate)
+    # tentative_candidate = candidate
+    # while squared_error <= squared_error_threshold:
+    #     candidate = tentative_candidate
+    #     tentative_candidate, squared_error = greedy_threshold(candidate)
+    candidate = jnp.zeros(len(coefficients))
+    if max_dimension == jnp.inf:
+        max_dimension = jnp.count_nonzero(coefficients)
+    for candidate in greedy_lars_threshold(coefficients, max_dimension):
+        squared_error = squared_l2_norm(coefficients - candidate, gram)
+        if squared_error <= squared_error_threshold:
+            break
+    return candidate
+
+
+fig, ax = plt.subplots(2, 2)
+ax[0, 0].plot(xs[0], zs[0], "k-", lw=2)
+ax[0, 0].plot(xs[0], coefficients @ measures, "--", lw=1.5, color="tab:red")
+ax[0, 1].stem(coefficients)
+print(f"Max. dimension: {basis_dimension}")
+retracted_coefficients = retract(coefficients, basis_dimension, 1e-3)
+print(f"Used dimension: {jnp.count_nonzero(retracted_coefficients)}")
+ax[1, 0].plot(xs[0], zs[0], "k-", lw=2)
+ax[1, 0].plot(xs[0], retracted_coefficients @ measures, "--", lw=1.5, color="tab:red")
+ax[1, 1].stem(retracted_coefficients)
+plt.show()
+exit()
+
+
 *_, basis_dimension = basis(parameters)
 plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}  |  Basis dimension: {basis_dimension}")
 # exit()
