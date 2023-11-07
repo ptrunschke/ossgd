@@ -7,7 +7,6 @@ import numpy as np
 from numpy.polynomial.legendre import legval
 from fourier import fourval
 from exponential import compute_exponential_coefficients
-from noisyopt import minimizeCompass
 
 from tqdm import trange
 import matplotlib.pyplot as plt
@@ -237,7 +236,7 @@ elif args.step_size == "adaptive":
         recovery_step_size = optimal_step_size * bias_step_size * jnp.sqrt(jnp.minimum(squared_gradient_norm, indep_est))
         return recovery_step_size
 elif args.step_size == "sls":
-    from noisyopt import minimizeCompass
+    # from noisyopt import minimizeCompass
 
     def step_size(key, iterate, update):
         objective_key = key
