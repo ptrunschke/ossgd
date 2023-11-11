@@ -148,49 +148,49 @@ import matplotlib.pyplot as plt
 # #       (the model class is not closed) and the limit can be reached with many different parameterisations.
 
 
-# ====================
-# Experiment 5
-# ====================
-# NOTE: Finally, we try a sample size of 1 and decrease the step size from the beginning.
-target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
-input_dimension = 1
-width = 10
-output_dimension = 1
-activation = lambda x: (jnp.tanh(x) + 1) / 2
-finite_difference = 0
-method = "NGD_quasi_projection"
-sample_size = 1
-sampling = "optimal"
-num_epochs = 15
-step_size_rule = "decreasing"
-limit_epoch = 0
-init_step_size = 1
-epoch_length = 100
-
-
-# ====================
-# Experiment 6
-# ====================
-# NOTE: Here we try a ReLU activation.
+# # ====================
+# # Experiment 5
+# # ====================
+# # NOTE: Finally, we try a sample size of 1 and decrease the step size from the beginning.
 # target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
-# target = lambda x: jnp.exp(x)  # Reaches an error of 4e-6
-# num_epochs = 30
-target = lambda x: jnp.sin(2 * jnp.pi * x)  # Reaches an error of 2e-4
-num_epochs = 15
-activation = lambda x: jnp.maximum(x, 0)
-input_dimension = 1
-width = 20
-output_dimension = 1
-finite_difference = 0
-method = "NGD_quasi_projection"
-# method = "SGD"
-sample_size = 1
-sampling = "optimal"
+# input_dimension = 1
+# width = 10
+# output_dimension = 1
+# activation = lambda x: (jnp.tanh(x) + 1) / 2
+# finite_difference = 0
+# method = "NGD_quasi_projection"
+# sample_size = 1
+# sampling = "optimal"
+# num_epochs = 15
 # step_size_rule = "decreasing"
-step_size_rule = "constant"
-limit_epoch = 0
-init_step_size = 0.001
-epoch_length = 500
+# limit_epoch = 0
+# init_step_size = 1
+# epoch_length = 100
+
+
+# # ====================
+# # Experiment 6
+# # ====================
+# # NOTE: Here we try a ReLU activation.
+# # target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
+# # target = lambda x: jnp.exp(x)  # Reaches an error of 4e-6
+# # num_epochs = 30
+# target = lambda x: jnp.sin(2 * jnp.pi * x)  # Reaches an error of 2e-4
+# num_epochs = 15
+# activation = lambda x: jnp.maximum(x, 0)
+# input_dimension = 1
+# width = 20
+# output_dimension = 1
+# finite_difference = 0
+# method = "NGD_quasi_projection"
+# # method = "SGD"
+# sample_size = 1
+# sampling = "optimal"
+# # step_size_rule = "decreasing"
+# step_size_rule = "constant"
+# limit_epoch = 0
+# init_step_size = 0.001
+# epoch_length = 500
 
 
 # ====================
@@ -211,6 +211,7 @@ sampling = "optimal"
 step_size_rule = "adaptive"
 num_epochs = 5
 epoch_length = 100
+Lip_0_sample_size_init = 10
 
 
 # plot_intermediate = True
@@ -472,6 +473,7 @@ def plot_state(title):
     ax[0].plot(xs[0], zs[0], "k--", lw=2, label="estimate")
     ax[0].set_xlim(0, 1)
     ax[0].legend()
+    ax[0].set_title("Approximation")
 
     system, transform, basis_dimension = basis(parameters)
     ks = 0
@@ -483,11 +485,23 @@ def plot_state(title):
     ax[1].plot(xs[0], ks, "-", color="tab:red", lw=2, label=r"$\mathfrak{K}$")
     ax[1].set_xlim(0, 1)
     ax[1].legend(loc="upper right")
+    ax[1].set_title("Basis")
 
-    steps = jnp.arange(1, len(losses) + 1)
-    ax[2].plot(steps, losses, color="tab:blue", label="Loss")
-    ax[2].plot(steps, variation_constants, color="tab:red", label=r"$\|\mathfrak{K}\|_{L^\infty}$")
-    ax[2].set_xlim(1, num_epochs * epoch_length + 1)
+    steps = onp.arange(1, len(losses) + 1)
+    samples = Lip_0_sample_size_init + steps * sample_size
+    ax[2].plot(samples, losses, color="tab:blue", label="Loss")
+    ax[2].plot(samples, variation_constants, color="tab:red", label=r"$\|\mathfrak{K}\|_{L^\infty}$")
+    xlim = Lip_0_sample_size_init + 1, Lip_0_sample_size_init + sample_size * num_epochs * epoch_length
+    ax[2].set_xlim(*xlim)
+    ax[2].set_xscale("log")
+    xticks = set(xlim)
+    xticks |= set(10 ** onp.arange(*onp.ceil(onp.log10(xlim)).astype(int)))
+    xticks = onp.array(sorted(xticks))
+    ax[2].set_xticks(xticks)
+    xticklabels = ax[2].get_xticklabels()
+    xticklabels[-1].set_text(fr"$\mathdefault{{{latex_float(xticks[-1], 1)[1:-1]}}}$")
+    ax[2].set_xticklabels(xticklabels)
+    ax[2].set_xlabel("cumulative sample size")
     ylim = (1e-4, 1e2)
     if len(losses) > 0:
         ls = jnp.array(losses)
@@ -499,9 +513,9 @@ def plot_state(title):
         ylim_1 = 10 ** (1.1 * jnp.log10(ylim_1))
         ylim = (ylim_0, ylim_1)
     ax[2].set_ylim(*ylim)
-    ax[2].set_xscale("log")
     ax[2].set_yscale("log")
     ax[2].legend(loc="upper right")
+    ax[2].set_title("Convergence")
 
     fig.suptitle(title)
     plt.show()
@@ -707,7 +721,7 @@ def retract(coefficients, max_dimension=jnp.inf, squared_error_threshold=0):
 Lip_0 = None
 *_, basis_dimension = basis(parameters)
 if plot_intermediate:
-    plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}  |  Basis dimension: {basis_dimension}")
+    plot_state(f"Initial value  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}  |  Basis dimension: {basis_dimension}")
 for epoch in range(num_epochs):
     for step in range(epoch_length):
         system = generating_system(parameters)
@@ -758,7 +772,7 @@ for epoch in range(num_epochs):
             # It holds that C(s) = Lip(s) * Curv(s) with
             # Lip_0 = jnp.sqrt(2 * losses[-1])
             if Lip_0 is None:
-                Lip_0_sample_size = 10
+                Lip_0_sample_size = Lip_0_sample_size_init
                 xs_lip0 = jax.random.uniform(training_key, (input_dimension, Lip_0_sample_size), minval=0, maxval=1)
                 Lip_0 = 2 * loss(parameters, xs_lip0, target(xs_lip0), 1) + 1
             Lip_0_sample_size += sample_size
@@ -800,7 +814,7 @@ for epoch in range(num_epochs):
         print(f"[{epoch+1:0{len(str(num_epochs))}d} | {step+1:0{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}")
     if plot_intermediate is True:
         plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
-plot_state(f"Termination  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
+plot_state(f"Terminal value  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
 
 
 A1, b1, A0, b0 = parameters
