@@ -2,6 +2,9 @@ import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
 
+import numpy as onp
+import scipy as osp
+
 import matplotlib.pyplot as plt
 
 
@@ -9,7 +12,6 @@ import matplotlib.pyplot as plt
 # # Experiment 1
 # # ====================
 # target = lambda x: jnp.sin(2 * jnp.pi * x)
-# is_smooth = True
 # input_dimension = 1
 # width = 10
 # output_dimension = 1
@@ -55,7 +57,6 @@ import matplotlib.pyplot as plt
 # #     Experiment 2
 # # ====================
 # target = lambda x: jnp.sin(2 * jnp.pi * x)
-# is_smooth = True
 # input_dimension = 1
 # width = 10
 # output_dimension = 1
@@ -87,7 +88,6 @@ import matplotlib.pyplot as plt
 # #       and only remains during the optimisation for the smooth sin target and when the approximation remains smooth.
 # #       For the step function target, the optimal density becomes more and more peaky around the jump point.
 # target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
-# is_smooth = False
 # input_dimension = 1
 # width = 10
 # output_dimension = 1
@@ -127,7 +127,6 @@ import matplotlib.pyplot as plt
 # #       and this can also happen while using the same NGD algorithm but with different sampling methods.
 # #       This is demonstrated in this experiment.
 # target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
-# is_smooth = False
 # input_dimension = 1
 # width = 10
 # output_dimension = 1
@@ -154,7 +153,6 @@ import matplotlib.pyplot as plt
 # ====================
 # NOTE: Finally, we try a sample size of 1 and decrease the step size from the beginning.
 target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
-is_smooth = False
 input_dimension = 1
 width = 10
 output_dimension = 1
@@ -170,6 +168,36 @@ init_step_size = 1
 epoch_length = 100
 
 
+# ====================
+# Experiment 6
+# ====================
+# NOTE: Here we try a ReLU activation.
+# target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
+# target = lambda x: jnp.exp(x)  # Reaches an error of 4e-6
+# num_epochs = 30
+target = lambda x: jnp.sin(2 * jnp.pi * x)  # Reaches an error of 2e-4
+num_epochs = 15
+activation = lambda x: jnp.maximum(x, 0)
+input_dimension = 1
+width = 20
+output_dimension = 1
+finite_difference = 0
+method = "NGD_quasi_projection"
+# method = "SGD"
+sample_size = 1
+sampling = "optimal"
+# step_size_rule = "decreasing"
+step_size_rule = "constant"
+limit_epoch = 0
+init_step_size = 0.001
+epoch_length = 500
+
+
+# plot_intermediate = True
+plot_intermediate = False
+gramian_quadrature_points = 10_000
+
+
 num_parameters = output_dimension + output_dimension * width + width + width * input_dimension
 
 
@@ -181,13 +209,24 @@ def prediction(parameters, x):
     return jnp.dot(A1, activation(jnp.dot(A0, x) + b0[:, None])) + b1[:, None]
 
 
+# def random_parameters(key):
+#     A1_key, b1_key, A0_key, b0_key = jax.random.split(key, 4)
+#     return [
+#         jax.random.normal(A1_key, (output_dimension, width)),
+#         jax.random.normal(b1_key, (output_dimension,)),
+#         jax.random.normal(A0_key, (width, input_dimension)),
+#         jax.random.normal(b0_key, (width,))
+#     ]
+
+
 def random_parameters(key):
     A1_key, b1_key, A0_key, b0_key = jax.random.split(key, 4)
+    normalise = lambda x: x / jnp.linalg.norm(x)
     return [
-        jax.random.normal(A1_key, (output_dimension, width)),
-        jax.random.normal(b1_key, (output_dimension,)),
-        jax.random.normal(A0_key, (width, input_dimension)),
-        jax.random.normal(b0_key, (width,))
+        normalise(jax.random.uniform(A1_key, (output_dimension, width), minval=-1, maxval=1)),
+        normalise(jax.random.uniform(b1_key, (output_dimension,), minval=-1, maxval=1)),
+        jnp.ones((width, input_dimension)),
+        jax.random.uniform(b0_key, (width,), minval=-1, maxval=0)
     ]
 
 
@@ -199,6 +238,26 @@ assert sum(p.size for p in parameters) == num_parameters
 
 def loss(parameters, xs, ys, ws):
     return 0.5 * jnp.mean(ws * (prediction(parameters, xs) - ys)**2)
+
+
+@jax.jit
+def loss_integrand(x, parameters):
+    x = onp.reshape(x, (1, -1))
+    y = target(x)
+    return jnp.sum((y - prediction(parameters, x)) ** 2, axis=0)
+
+
+def true_loss(parameters, epsrel=1e-2):
+    grad_norm = osp.integrate.romberg(
+        loss_integrand,
+        0,
+        1,
+        args=(parameters,),
+        tol=onp.finfo(onp.float32).eps,
+        rtol=epsrel,
+        vec_func=True
+    )
+    return 0.5 * grad_norm[0]
 
 
 def vectorised_parameters(parameters):
@@ -258,9 +317,9 @@ def generating_system(parameters, fd=0):
     return evaluate_generating_system
 
 
-def gramian(evaluate_basis, n=1_000):
+def gramian(evaluate_basis):
     assert input_dimension == 1
-    xs = jnp.linspace(0, 1, n).reshape(1, n)
+    xs = jnp.linspace(0, 1, gramian_quadrature_points).reshape(1, gramian_quadrature_points)
     measures = evaluate_basis(xs).T
     return jsp.integrate.trapezoid(measures[:, :, None] * measures[:, None, :], xs[0], axis=0)
 
@@ -269,14 +328,14 @@ def squared_l2_norm(coefficients, gram):
     return coefficients @ gram @ coefficients
 
 
-def basis_transform(system, n=1_000):
-    gram = gramian(system, n=n)
+def basis_transform(system):
+    gram = gramian(system)
     r = jnp.linalg.matrix_rank(gram)
     s, V = jnp.linalg.eigh(gram)
     return s[::-1], V.T[::-1], r
 
 
-def basis(parameters, n=1_000):
+def basis(parameters):
     system = generating_system(parameters, fd=finite_difference)
     s, Vt, r = basis_transform(system)
     s, Vt = s[:r], Vt[:r]
@@ -284,9 +343,19 @@ def basis(parameters, n=1_000):
     return system, X, r
 
 
-# def basis_old(parameters, n=1_000):
+# assert input_dimension == 1
+# xs = jnp.linspace(0, 1, 1000).reshape(1, 1000)
+# system, transform, basis_dimension = basis(parameters)
+# fig, ax = plt.subplots(1, 1)
+# for bs in system(xs):
+#     ax.plot(xs[0], bs)
+# plt.show()
+# exit()
+
+
+# def basis_old(parameters):
 #     system = generating_system(parameters, fd=finite_difference)
-#     gram = gramian(system, n=n)
+#     gram = gramian(system)
 #     r = jnp.linalg.matrix_rank(gram)
 #     s, V = jnp.linalg.eigh(gram)
 #     s, V = s[-r:], V[:, -r:]
@@ -325,13 +394,15 @@ def quasi_projected_gradient(parameters, xs, ys, ws):
     # This ensures that qs = inv(M) @ b remains unbiased.
     assert grad.shape == (output_dimension, sample_size) and output_dimension == 1
     system = generating_system(parameters, fd=finite_difference)
-    gram = gramian(system, n=1_000)
+    gram = gramian(system)
     qs = system(xs) * ws @ grad[0] / sample_size
     # NOTE: By Leibniz integral rule, the preceding line is equivalent to
     # qs = jnp.concatenate([p.ravel() for p in jax.grad(loss)(parameters, xs, ys, ws)])
     # NOTE: This indeed holds for all sufficiently regular loss functions.
     #       This means that the quasi-projection algorithm is EXACTLY equivalent to NGD for L2,
     #       when the update is performed by utilising Taylors theorem.
+    eps = jnp.finfo(gram.dtype).resolution * jnp.linalg.norm(gram)
+    gram += eps * jnp.eye(gram.shape[0])
     qs, *_ = jnp.linalg.lstsq(gram, qs)
     return devectorised_parameters(qs)
 
@@ -360,30 +431,49 @@ def updated_parameters(parameters, xs, ys, ws, step_size):
     else:
         assert method == "NGD_projection"
         gradients = projected_gradient(parameters, xs, ys, ws)
-    system = generating_system(parameters, fd=finite_difference)
-    gram = gramian(system, n=1_000)
-    vectorised_parameters = lambda ps: jnp.concatenate([p.ravel() for p in ps])  # TODO: Make uniform...
-    gradient_norm = jnp.sqrt(squared_l2_norm(vectorised_parameters(gradients), gram))
-    return [θ - step_size * dθ for (θ, dθ) in zip(parameters, gradients)], gradient_norm
+    return [θ - step_size * dθ for (θ, dθ) in zip(parameters, gradients)]
 
 
 assert input_dimension == 1
 xs = jnp.linspace(0, 1, 1000).reshape(1, 1000)
 ws = jnp.ones((1000,))
 ys = target(xs)
+losses = []
+variation_constants = []
 def plot_state(title):
-    plt.plot(xs[0], ys[0], "k-", lw=2)
+    fig, ax = plt.subplots(1, 3, figsize=(14, 7))
+
+    ax[0].plot(xs[0], ys[0], "k-", lw=2, label="target")
     zs = prediction(parameters, xs)
-    plt.plot(xs[0], zs[0], "k--", lw=2)
+    ax[0].plot(xs[0], zs[0], "k--", lw=2, label="estimate")
+    ax[0].set_xlim(0, 1)
+    ax[0].legend()
+
     system, transform, basis_dimension = basis(parameters)
     ks = 0
     for bs in transform @ system(xs):
-        plt.plot(xs[0], bs, lw=1)
+        ax[1].plot(xs[0], bs, lw=1, alpha=0.5)
         assert bs.shape == (xs.shape[1],)
         ks += bs**2
     ks /= basis_dimension
-    plt.plot(xs[0], ks, "-", color="tab:red", lw=2)
-    plt.title(title)
+    ax[1].plot(xs[0], ks, "-", color="tab:red", lw=2, label=r"$\mathfrak{K}$")
+    ax[1].set_xlim(0, 1)
+    ax[1].legend(loc="upper right")
+
+    steps = jnp.arange(1, len(losses) + 1)
+    ax[2].plot(steps, losses, color="tab:blue", label="Loss")
+    ax[2].plot(steps, variation_constants, color="tab:red", label=r"$\|\mathfrak{K}\|_{L^\infty}$")
+    ax[2].set_xlim(1, num_epochs * epoch_length + 1)
+    ylim = ax[2].get_ylim()
+    if ylim[0] <= 0:
+        ylim[0] = 1e-5
+    ylim = min(ylim[0], 1e-5), max(ylim, 1e3)
+    ax[2].set_ylim(*ylim)
+    ax[2].set_xscale("log")
+    ax[2].set_yscale("log")
+    ax[2].legend(loc="upper right")
+
+    fig.suptitle(title)
     plt.show()
 
 
@@ -458,7 +548,11 @@ onb_measures = transform @ measures
 assert onb_measures.shape == (basis_dimension, xs.shape[1])
 G = jsp.integrate.trapezoid(onb_measures[:, :, None] * onb_measures.T[None], xs[0], axis=1)
 # assert jnp.allclose(G, jnp.eye(basis_dimension), atol=jnp.finfo(zs.dtype).resolution)
-assert jnp.allclose(G, jnp.eye(basis_dimension), atol=1e-3)
+# TODO: All integration routines should just take rtol and return the error as well.
+#       This includes gramian().
+if not jnp.allclose(G, jnp.eye(basis_dimension), atol=1e-3):
+    print("WARNING: Gramian is ill-conditioned or badly integrated.")
+    print(f"         Orthogonalisation error: {jnp.linalg.norm(G - jnp.eye(basis_dimension)):.2e}")
 
 # onb_coefficients, *_ = jnp.linalg.lstsq(transform.T, coefficients)
 basis_dimension += 1
@@ -471,7 +565,7 @@ onb_coefficients = jnp.sqrt(s[:basis_dimension]) * (Vt[:basis_dimension] @ coeff
 # plt.show()
 # exit()
 
-gram = gramian(system, n=1_000)
+gram = gramian(system)  # TODO: The gramian should be a parameter to the rounding routines.
 
 def greedy_threshold(coefficients):
     assert coefficients.ndim == 1
@@ -581,11 +675,8 @@ def retract(coefficients, max_dimension=jnp.inf, squared_error_threshold=0):
 
 
 *_, basis_dimension = basis(parameters)
-plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}  |  Basis dimension: {basis_dimension}")
-# exit()
-losses = []
-gradients = []
-variation_constants = []
+if plot_intermediate:
+    plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}  |  Basis dimension: {basis_dimension}")
 for epoch in range(num_epochs):
     for step in range(epoch_length):
         if step_size_rule == "constant":
@@ -598,7 +689,7 @@ for epoch in range(num_epochs):
             limit_total_step = limit_epoch * epoch_length
             relative_step = max(total_step - limit_total_step, 0)
             step_size = init_step_size / jnp.sqrt(relative_step + 1)
-        losses.append(loss(parameters, xs, ys, ws))
+        losses.append(true_loss(parameters))
         training_key, key = jax.random.split(key, 2)
         assert input_dimension == 1
         osd = optimal_sampling_density(parameters)
@@ -612,38 +703,20 @@ for epoch in range(num_epochs):
             ws_train = 1 / osd(xs_train)
         ys_train = target(xs_train)
 
-        if losses[-1] / 2 <= 1 / xs.shape[1]**(1 + is_smooth):
-            new_size = 10**(-int(jnp.floor(jnp.log10(losses[-1] / 2))))
-            assert new_size > xs.shape[1]
-            print(f"Increaing spatial discretisation: {xs.shape[1]} → {new_size}")
-            xs = jnp.linspace(0, 1, new_size).reshape(1, new_size)
-            ws = jnp.ones((new_size,))
-            ys = target(xs)
         system = generating_system(parameters)
-        grad = gradient(parameters, xs, ys)
-        grad = jnp.trapz(system(xs) * ws * grad[0], xs, axis=1)
-        gram = gramian(system, n=xs.shape[1])
+        gram = gramian(system)
         basis_dimension = jnp.linalg.matrix_rank(gram)
-        gradient_norm = jnp.sqrt(squared_l2_norm(grad, gram))
-        gradients.append(gradient_norm)
-        parameters, _ = updated_parameters(parameters, xs_train, ys_train, ws_train, step_size)
+        parameters = updated_parameters(parameters, xs_train, ys_train, ws_train, step_size)
         # NOTE: The gradient norm returned by updated_parameters(...) is not a valid indicator of a stationary point,
         #       since it is the L2 norm of the estimated projected gradient.
         #       This estiamte may not be zero even though the true projected gradient is.
+        #       But estimating the true projected gradient is not feasible.
         variation_constants.append(jnp.max(ps * basis_dimension))
-        print(f"[{epoch+1:{len(str(num_epochs))}d} | {step+1:{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Gradient norm: {gradient_norm:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}")
-    # plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
+        print(f"[{epoch+1:0{len(str(num_epochs))}d} | {step+1:0{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}")
+    if plot_intermediate is True:
+        plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
 plot_state(f"Termination  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
 
 
-fig, ax = plt.subplots(1, 2)
-ax[0].plot(xs[0], ys[0], "k-", lw=2)
-zs = prediction(parameters, xs)
-ax[0].plot(xs[0], zs[0], "k--", lw=2)
-ax[1].plot(gradients, color="tab:green", lw=1, alpha=0.5, label="Gradient norm")
-ax[1].plot(losses, color="tab:blue", label="Loss")
-ax[1].plot(variation_constants, color="tab:red", label=r"$\|\mathfrak{K}\|_{L^\infty}$")
-ax[1].legend(loc="upper right")
-ax[1].set_xscale("log")
-ax[1].set_yscale("log")
-plt.show()
+A1, b1, A0, b0 = parameters
+jnp.savez("shallow_parameter.npz", A1=A1, b1=b1, A0=A0, b0=b0)
