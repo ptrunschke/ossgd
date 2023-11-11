@@ -193,6 +193,26 @@ init_step_size = 0.001
 epoch_length = 500
 
 
+# ====================
+# Experiment 7
+# ====================
+# NOTE: Try to select the step size adaptively.
+# target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
+# target = lambda x: jnp.exp(x)
+target = lambda x: jnp.sin(2 * jnp.pi * x)
+activation = lambda x: jnp.maximum(x, 0)
+input_dimension = 1
+width = 20
+output_dimension = 1
+finite_difference = 0
+method = "NGD_quasi_projection"
+sample_size = 1
+sampling = "optimal"
+step_size_rule = "adaptive"
+num_epochs = 5
+epoch_length = 100
+
+
 # plot_intermediate = True
 plot_intermediate = False
 gramian_quadrature_points = 1_000
@@ -422,8 +442,7 @@ def projected_gradient(parameters, xs, ys, ws):
     return devectorised_parameters(qs)
 
 
-# @jax.jit
-def updated_parameters(parameters, xs, ys, ws, step_size):
+def update_direction(parameters, xs, ys, ws):
     if method == "SGD":
         gradients = jax.grad(loss)(parameters, xs, ys, ws)
     elif method == "NGD_quasi_projection":
@@ -431,6 +450,11 @@ def updated_parameters(parameters, xs, ys, ws, step_size):
     else:
         assert method == "NGD_projection"
         gradients = projected_gradient(parameters, xs, ys, ws)
+    return gradients
+
+
+# @jax.jit
+def updated_parameters(parameters, gradients, step_size):
     return [θ - step_size * dθ for (θ, dθ) in zip(parameters, gradients)]
 
 
@@ -464,10 +488,16 @@ def plot_state(title):
     ax[2].plot(steps, losses, color="tab:blue", label="Loss")
     ax[2].plot(steps, variation_constants, color="tab:red", label=r"$\|\mathfrak{K}\|_{L^\infty}$")
     ax[2].set_xlim(1, num_epochs * epoch_length + 1)
-    ylim = ax[2].get_ylim()
-    if ylim[0] <= 0:
-        ylim[0] = 1e-5
-    ylim = min(ylim[0], 1e-5), max(ylim, 1e3)
+    ylim = (1e-4, 1e2)
+    if len(losses) > 0:
+        ls = jnp.array(losses)
+        ks = jnp.array(variation_constants)
+        ylim_0 = min(ls[ls > 0].min(), ks[ks>0].min(), ylim[0])
+        assert ylim_0 < 1
+        ylim_0 = 10 ** (1.1 * jnp.log10(ylim_0))
+        ylim_1 = max(ls.max(), ks.max(), ylim[1])
+        ylim_1 = 10 ** (1.1 * jnp.log10(ylim_1))
+        ylim = (ylim_0, ylim_1)
     ax[2].set_ylim(*ylim)
     ax[2].set_xscale("log")
     ax[2].set_yscale("log")
@@ -674,22 +704,17 @@ def retract(coefficients, max_dimension=jnp.inf, squared_error_threshold=0):
 #       Then, whenever we stagnate we can adapt the model class by increasing the width with a random kick.
 
 
+Lip_0 = None
 *_, basis_dimension = basis(parameters)
 if plot_intermediate:
     plot_state(f"Initialisation  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}  |  Basis dimension: {basis_dimension}")
 for epoch in range(num_epochs):
     for step in range(epoch_length):
-        if step_size_rule == "constant":
-            step_size = init_step_size
-        elif step_size_rule == "constant_epoch":
-            step_size = init_step_size / 10 ** max(epoch - limit_epoch + 1, 0)
-        else:
-            assert step_size_rule == "decreasing"
-            total_step = epoch * epoch_length + step
-            limit_total_step = limit_epoch * epoch_length
-            relative_step = max(total_step - limit_total_step, 0)
-            step_size = init_step_size / jnp.sqrt(relative_step + 1)
+        system = generating_system(parameters)
+        gram = gramian(system)
+        basis_dimension = jnp.linalg.matrix_rank(gram)
         losses.append(true_loss(parameters))
+
         training_key, key = jax.random.split(key, 2)
         assert input_dimension == 1
         osd = optimal_sampling_density(parameters)
@@ -703,10 +728,64 @@ for epoch in range(num_epochs):
             ws_train = 1 / osd(xs_train)
         ys_train = target(xs_train)
 
-        system = generating_system(parameters)
-        gram = gramian(system)
-        basis_dimension = jnp.linalg.matrix_rank(gram)
-        parameters = updated_parameters(parameters, xs_train, ys_train, ws_train, step_size)
+        ud = update_direction(parameters, xs, ys, ws)
+
+        if step_size_rule == "constant":
+            step_size = init_step_size
+        elif step_size_rule == "constant_epoch":
+            step_size = init_step_size / 10 ** max(epoch - limit_epoch + 1, 0)
+        elif step_size_rule == "adaptive":
+            L = 1  # Lipschitz smoothness constant for the least squares loss
+            var_1 = (sample_size + basis_dimension - 1) / sample_size
+            # Recall the descent factor σ = s - s**2 * (L+C)/2 * var_1 .
+            # The step size must be larger than 0 and σ is maximised for C=0 and s=1/(L*var_1).
+            smin = 0
+            smax = 1 / (L * var_1)
+
+            # # Start with the most trivial case.
+            # def descent(s):
+            #     return true_loss(updated_parameters(parameters, ud, s))
+            # res = osp.optimize.minimize_scalar(descent, bounds=(smin, smax), method="bounded")
+            # step_size = res.x
+
+            # It holds that C(s) = Lip(s) * Curv(s) with
+            # Lip_0 = jnp.sqrt(2 * losses[-1])
+            if Lip_0 is None:
+                Lip_0_sample_size = 10
+                xs_lip0 = jax.random.uniform(training_key, (input_dimension, Lip_0_sample_size), minval=0, maxval=1)
+                Lip_0 = 2 * loss(parameters, xs_lip0, target(xs_lip0), 1) + 1
+            Lip_0_sample_size += sample_size
+            relaxation = sample_size / Lip_0_sample_size
+            Lip_0 = (1 - relaxation) * Lip_0 + relaxation * loss(parameters, xs_train, ys_train, ws_train)
+            Lip = lambda s: Lip_0 + s
+
+            ud_vec = jnp.concatenate([p.ravel() for p in ud])
+            ud_norm_squared = ud_vec.T @ gram @ ud_vec
+            xs_curv = jnp.linspace(0, 1, 1000).reshape(1, -1)
+            ys_curv = prediction(parameters, xs_curv)
+            def Curv(s):
+                # | prediction(updated_parameters(parameters, ud, s), ·) - prediction(parameters, ·) |
+                #     <= 0.5 * Curv(s) * s**2 * ud_norm_squared
+                ys_ref = prediction(updated_parameters(parameters, ud, s), xs_curv)
+                dist = jnp.trapz(jnp.sum((ys_ref - ys_curv)**2, axis=0), xs_curv[0])
+                return 2 * dist / (ud_norm_squared * s**2)
+
+            def descent(s):
+                C = Lip(s) * Curv(s)
+                return s - s**2 * (L + C) / 2 * var_1
+
+            res = osp.optimize.minimize_scalar(lambda s: -descent(s), bounds=(smin, smax), method="bounded")
+            step_size = res.x
+
+        else:
+            assert step_size_rule == "decreasing"
+            total_step = epoch * epoch_length + step
+            limit_total_step = limit_epoch * epoch_length
+            relative_step = max(total_step - limit_total_step, 0)
+            step_size = init_step_size / jnp.sqrt(relative_step + 1)
+
+        parameters = updated_parameters(parameters, ud, step_size)
+
         # NOTE: The gradient norm returned by updated_parameters(...) is not a valid indicator of a stationary point,
         #       since it is the L2 norm of the estimated projected gradient.
         #       This estiamte may not be zero even though the true projected gradient is.
