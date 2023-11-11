@@ -719,6 +719,8 @@ for epoch in range(num_epochs):
         assert input_dimension == 1
         osd = optimal_sampling_density(parameters)
         ps = osd(xs)
+        variation_constants.append(jnp.max(ps) * basis_dimension)
+
         if sampling == "uniform":
             xs_train = jax.random.uniform(training_key, (input_dimension, sample_size), minval=0, maxval=1)
             ws_train = jnp.ones((sample_size,))
@@ -735,8 +737,13 @@ for epoch in range(num_epochs):
         elif step_size_rule == "constant_epoch":
             step_size = init_step_size / 10 ** max(epoch - limit_epoch + 1, 0)
         elif step_size_rule == "adaptive":
+            assert method == "NGD_quasi_projection"
             L = 1  # Lipschitz smoothness constant for the least squares loss
-            var_1 = (sample_size + basis_dimension - 1) / sample_size
+            if sampling == "optimal":
+                V = basis_dimension
+            else:
+                V = variation_constants[-1]
+            var_1 = (sample_size + V - 1) / sample_size
             # Recall the descent factor σ = s - s**2 * (L+C)/2 * var_1 .
             # The step size must be larger than 0 and σ is maximised for C=0 and s=1/(L*var_1).
             smin = 0
@@ -790,7 +797,6 @@ for epoch in range(num_epochs):
         #       since it is the L2 norm of the estimated projected gradient.
         #       This estiamte may not be zero even though the true projected gradient is.
         #       But estimating the true projected gradient is not feasible.
-        variation_constants.append(jnp.max(ps * basis_dimension))
         print(f"[{epoch+1:0{len(str(num_epochs))}d} | {step+1:0{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}")
     if plot_intermediate is True:
         plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
