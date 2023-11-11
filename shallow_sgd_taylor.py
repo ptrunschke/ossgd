@@ -195,7 +195,7 @@ epoch_length = 500
 
 # plot_intermediate = True
 plot_intermediate = False
-gramian_quadrature_points = 10_000
+gramian_quadrature_points = 1_000
 
 
 num_parameters = output_dimension + output_dimension * width + width + width * input_dimension
@@ -402,7 +402,7 @@ def quasi_projected_gradient(parameters, xs, ys, ws):
     #       This means that the quasi-projection algorithm is EXACTLY equivalent to NGD for L2,
     #       when the update is performed by utilising Taylors theorem.
     eps = jnp.finfo(gram.dtype).resolution * jnp.linalg.norm(gram)
-    gram += eps * jnp.eye(gram.shape[0])
+    gram += eps * jnp.eye(gram.shape[0])  # improve numerical stability
     qs, *_ = jnp.linalg.lstsq(gram, qs)
     return devectorised_parameters(qs)
 
