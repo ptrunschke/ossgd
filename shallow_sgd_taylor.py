@@ -200,9 +200,12 @@ import matplotlib.pyplot as plt
 # target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
 # target = lambda x: jnp.exp(x)
 target = lambda x: jnp.sin(2 * jnp.pi * x)
+target = lambda x: - jnp.pi * (jnp.euler_gamma - x)**2 + jnp.e
 activation = lambda x: jnp.maximum(x, 0)
+activation.__name__ = "ReLU"
 input_dimension = 1
 width = 20
+# width = 100
 output_dimension = 1
 finite_difference = 0
 method = "NGD_quasi_projection"
@@ -214,9 +217,12 @@ epoch_length = 100
 Lip_0_sample_size_init = 10
 
 
-# plot_intermediate = True
-plot_intermediate = False
+plot_intermediate = True
+# plot_intermediate = False
 gramian_quadrature_points = 1_000
+init = "random"
+init = "last_run"
+width = 40  # Increase the width by 20.
 
 
 num_parameters = output_dimension + output_dimension * width + width + width * input_dimension
@@ -224,6 +230,7 @@ num_parameters = output_dimension + output_dimension * width + width + width * i
 
 def prediction(parameters, x):
     A1, b1, A0, b0 = parameters
+    width, = b0.shape
     assert A1.shape == (output_dimension, width) and b1.shape == (output_dimension,)
     assert A0.shape == (width, input_dimension) and b0.shape == (width,)
     assert x.ndim == 2 and x.shape[0] == input_dimension
@@ -240,7 +247,7 @@ def prediction(parameters, x):
 #     ]
 
 
-def random_parameters(key):
+def random_parameters(key, width=width):
     A1_key, b1_key, A0_key, b0_key = jax.random.split(key, 4)
     normalise = lambda x: x / jnp.linalg.norm(x)
     return [
@@ -251,10 +258,16 @@ def random_parameters(key):
     ]
 
 
-key = jax.random.PRNGKey(0)
-parameters_key, key = jax.random.split(key, 2)
-parameters = random_parameters(parameters_key)
-assert sum(p.size for p in parameters) == num_parameters
+if init == "random":
+    key = jax.random.PRNGKey(0)
+    parameters_key, key = jax.random.split(key, 2)
+    parameters = random_parameters(parameters_key)
+    assert sum(p.size for p in parameters) == num_parameters
+else:
+    assert init == "last_run"
+    key = jax.random.PRNGKey(1)
+    z = jnp.load("shallow_parameters.npz")
+    parameters = z["A1"], z["b1"], z["A0"], z["b0"]
 
 
 def loss(parameters, xs, ys, ws):
@@ -282,9 +295,10 @@ def true_loss(parameters, epsrel=1e-2):
 
 
 def vectorised_parameters(parameters):
+    *offset_shape, width = parameters[-1].shape
+    offset_shape = tuple(offset_shape)
     shapes = [(output_dimension, width), (output_dimension,), (width, input_dimension), (width,)]
     assert len(parameters) == len(shapes)
-    offset_shape = parameters[-1].shape[:-1]
     assert len(offset_shape) == 2 and offset_shape[0] == output_dimension and output_dimension == 1
     vector = []
     for parameter, shape in zip(parameters, shapes):
@@ -471,6 +485,10 @@ def plot_state(title):
     ax[0].plot(xs[0], ys[0], "k-", lw=2, label="target")
     zs = prediction(parameters, xs)
     ax[0].plot(xs[0], zs[0], "k--", lw=2, label="estimate")
+    if activation.__name__ == "ReLU":
+        knots = -parameters[-1]
+        zs_knots = prediction(parameters, knots[None])
+        ax[0].plot(knots, zs_knots[0], "o", color="tab:red", label="spline knots")
     ax[0].set_xlim(0, 1)
     ax[0].legend()
     ax[0].set_title("Approximation")
@@ -568,6 +586,7 @@ def optimal_sampling_density(parameters):
 
 
 def embed(parameters):
+    num_parameters = sum(p.size for p in parameters)
     A1, b1 = parameters[:2]
     coefficients = jnp.zeros((num_parameters,))
     start, stop = 0, A1.size
@@ -577,31 +596,31 @@ def embed(parameters):
     return coefficients
 
 
-system = generating_system(parameters, finite_difference)
-s, Vt, basis_dimension = basis_transform(system)
-zs = prediction(parameters, xs)
-coefficients = embed(parameters)
-measures = system(xs)
-assert measures.shape == (num_parameters, xs.shape[1])
-# assert jnp.allclose(coefficients @ measures, zs[0], atol=jnp.finfo(zs.dtype).resolution)
-assert jnp.allclose(coefficients @ measures, zs[0], atol=1e-4)
+# system = generating_system(parameters, finite_difference)
+# s, Vt, basis_dimension = basis_transform(system)
+# zs = prediction(parameters, xs)
+# coefficients = embed(parameters)
+# measures = system(xs)
+# assert measures.shape == (num_parameters, xs.shape[1])
+# # assert jnp.allclose(coefficients @ measures, zs[0], atol=jnp.finfo(zs.dtype).resolution)
+# assert jnp.allclose(coefficients @ measures, zs[0], atol=1e-4)
 
-transform = Vt[:basis_dimension] / jnp.sqrt(s[:basis_dimension, None])
-assert jnp.allclose(transform, jnp.diag(1 / jnp.sqrt(s[:basis_dimension])) @ Vt[:basis_dimension])
-onb_measures = transform @ measures
-assert onb_measures.shape == (basis_dimension, xs.shape[1])
-G = jsp.integrate.trapezoid(onb_measures[:, :, None] * onb_measures.T[None], xs[0], axis=1)
-# assert jnp.allclose(G, jnp.eye(basis_dimension), atol=jnp.finfo(zs.dtype).resolution)
-# TODO: All integration routines should just take rtol and return the error as well.
-#       This includes gramian().
-if not jnp.allclose(G, jnp.eye(basis_dimension), atol=1e-3):
-    print("WARNING: Gramian is ill-conditioned or badly integrated.")
-    print(f"         Orthogonalisation error: {jnp.linalg.norm(G - jnp.eye(basis_dimension)):.2e}")
+# transform = Vt[:basis_dimension] / jnp.sqrt(s[:basis_dimension, None])
+# assert jnp.allclose(transform, jnp.diag(1 / jnp.sqrt(s[:basis_dimension])) @ Vt[:basis_dimension])
+# onb_measures = transform @ measures
+# assert onb_measures.shape == (basis_dimension, xs.shape[1])
+# G = jsp.integrate.trapezoid(onb_measures[:, :, None] * onb_measures.T[None], xs[0], axis=1)
+# # assert jnp.allclose(G, jnp.eye(basis_dimension), atol=jnp.finfo(zs.dtype).resolution)
+# # TODO: All integration routines should just take rtol and return the error as well.
+# #       This includes gramian().
+# if not jnp.allclose(G, jnp.eye(basis_dimension), atol=1e-3):
+#     print("WARNING: Gramian is ill-conditioned or badly integrated.")
+#     print(f"         Orthogonalisation error: {jnp.linalg.norm(G - jnp.eye(basis_dimension)):.2e}")
 
-# onb_coefficients, *_ = jnp.linalg.lstsq(transform.T, coefficients)
-basis_dimension += 1
-onb_measures = Vt[:basis_dimension] / jnp.sqrt(s[:basis_dimension, None]) @ measures
-onb_coefficients = jnp.sqrt(s[:basis_dimension]) * (Vt[:basis_dimension] @ coefficients)
+# # onb_coefficients, *_ = jnp.linalg.lstsq(transform.T, coefficients)
+# basis_dimension += 1
+# onb_measures = Vt[:basis_dimension] / jnp.sqrt(s[:basis_dimension, None]) @ measures
+# onb_coefficients = jnp.sqrt(s[:basis_dimension]) * (Vt[:basis_dimension] @ coefficients)
 
 # plt.plot(xs[0], zs[0])
 # plt.plot(xs[0], coefficients @ measures, "--")
@@ -609,17 +628,17 @@ onb_coefficients = jnp.sqrt(s[:basis_dimension]) * (Vt[:basis_dimension] @ coeff
 # plt.show()
 # exit()
 
-gram = gramian(system)  # TODO: The gramian should be a parameter to the rounding routines.
+# gram = gramian(system)  # TODO: The gramian should be a parameter to the rounding routines.
 
-def greedy_threshold(coefficients):
-    assert coefficients.ndim == 1
-    nonzero_indices = jnp.where(coefficients != 0)[0]
-    errors = []
-    for index in nonzero_indices:
-        candidate = coefficients.at[index].set(0)
-        errors.append(squared_l2_norm(coefficients - candidate, gram))
-    optimal_index = jnp.argmin(jnp.asarray(errors))
-    return coefficients.at[nonzero_indices[optimal_index]].set(0), errors[optimal_index]
+# def greedy_threshold(coefficients):
+#     assert coefficients.ndim == 1
+#     nonzero_indices = jnp.where(coefficients != 0)[0]
+#     errors = []
+#     for index in nonzero_indices:
+#         candidate = coefficients.at[index].set(0)
+#         errors.append(squared_l2_norm(coefficients - candidate, gram))
+#     optimal_index = jnp.argmin(jnp.asarray(errors))
+#     return coefficients.at[nonzero_indices[optimal_index]].set(0), errors[optimal_index]
 
 # candidate = coefficients
 # error = 0
@@ -640,7 +659,7 @@ import numpy as onp
 from lasso_lars import warnings, LarsState, ConvergenceWarning
 
 
-def greedy_lars_threshold(coefficients, max_dimension):
+def greedy_lars_threshold(coefficients, gram, max_dimension):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         coefs = onp.array(coefficients)
@@ -661,7 +680,7 @@ def greedy_lars_threshold(coefficients, max_dimension):
             coefs[active] = 0
 
 
-# for candidate in greedy_lars_threshold(coefficients, jnp.count_nonzero(coefficients)):
+# for candidate in greedy_lars_threshold(coefficients, gram, jnp.count_nonzero(coefficients)):
 #     active = jnp.nonzero(candidate)[0]
 #     print(active)
 #     error = squared_l2_norm(coefficients - candidate, gram)
@@ -674,7 +693,7 @@ def greedy_lars_threshold(coefficients, max_dimension):
 # exit()
 
 
-def retract(coefficients, max_dimension=jnp.inf, squared_error_threshold=0):
+def retract(coefficients, gram, max_dimension=jnp.inf, squared_error_threshold=0):
     # candidate = coefficients
     # while jnp.count_nonzero(candidate) > max_dimension:
     #     candidate, squared_error = greedy_threshold(candidate)
@@ -685,7 +704,7 @@ def retract(coefficients, max_dimension=jnp.inf, squared_error_threshold=0):
     candidate = jnp.zeros(len(coefficients))
     if max_dimension == jnp.inf:
         max_dimension = jnp.count_nonzero(coefficients)
-    for candidate in greedy_lars_threshold(coefficients, max_dimension):
+    for candidate in greedy_lars_threshold(coefficients, gram, max_dimension):
         squared_error = squared_l2_norm(coefficients - candidate, gram)
         if squared_error <= squared_error_threshold:
             break
@@ -697,13 +716,67 @@ def retract(coefficients, max_dimension=jnp.inf, squared_error_threshold=0):
 # ax[0, 0].plot(xs[0], coefficients @ measures, "--", lw=1.5, color="tab:red")
 # ax[0, 1].stem(coefficients)
 # print(f"Max. dimension: {basis_dimension}")
-# retracted_coefficients = retract(coefficients, basis_dimension, 1e-3)
+# threshold = 1e-6 * squared_l2_norm(coefficients, gram)
+# retracted_coefficients = retract(coefficients, gram, basis_dimension, threshold)
 # print(f"Used dimension: {jnp.count_nonzero(retracted_coefficients)}")
 # ax[1, 0].plot(xs[0], zs[0], "k-", lw=2)
 # ax[1, 0].plot(xs[0], retracted_coefficients @ measures, "--", lw=1.5, color="tab:red")
 # ax[1, 1].stem(retracted_coefficients)
 # plt.show()
-# exit()
+
+
+def add(parameters_1, parameters_2):
+    A1_1, b1_1, A0_1, b0_1 = parameters_1
+    A1_2, b1_2, A0_2, b0_2 = parameters_2
+    A1 = jnp.concatenate([A1_1, A1_2], axis=1)
+    b1 = b1_1 + b1_2
+    A0 = jnp.concatenate([A0_1, A0_2], axis=0)
+    b0 = jnp.concatenate([b0_1, b0_2], axis=0)
+    return A1, b1, A0, b0
+
+
+def network_width(parameters):
+    return len(parameters[-1])
+
+
+if init == "last_run":
+    gramian_quadrature_points *= 10
+    coefficients = embed(parameters)
+    system = generating_system(parameters, finite_difference)
+    gram = gramian(system)
+    es = jnp.linalg.eigvalsh(gram)
+    basis_dimension = int(jnp.count_nonzero(es > 1e-6 * abs(es).max()))
+    print(f"Max. dimension: {basis_dimension}")
+    threshold = 1e-6 * squared_l2_norm(coefficients, gram)
+    # Every width larger than the basis_dimension is ill-conditioned.
+    retracted_coefficients = retract(coefficients, gram, basis_dimension, threshold)
+    print(f"Used dimension: {jnp.count_nonzero(retracted_coefficients)}")
+    retraction_error = jnp.sqrt(squared_l2_norm(coefficients - retracted_coefficients, gram))
+    print(f"Retraction error: {retraction_error:.2e}")
+    old_width = network_width(parameters)
+    assert jnp.allclose(retracted_coefficients[old_width + output_dimension:], 0)
+    nz = jnp.nonzero(retracted_coefficients[:old_width])[0]
+    retracted_parameters = retracted_coefficients[nz][None], 0 * parameters[1] + retracted_coefficients[old_width], parameters[2][nz], parameters[3][nz]
+    assert network_width(retracted_parameters) == len(nz)
+
+    # plt.plot(xs[0], prediction(parameters, xs)[0], "k-", lw=2)
+    # plt.plot(xs[0], prediction(retracted_parameters, xs)[0], "--", lw=1.5, color="tab:red")
+    # plt.show()
+
+    parameters_key, key = jax.random.split(key, 2)
+    random_kick_parameters = random_parameters(parameters_key, width=width-network_width(retracted_parameters))
+    random_kick_parameters[0] = 10 * retraction_error * random_kick_parameters[0]
+    random_kick_parameters[1] = 0 * random_kick_parameters[1]
+
+    new_parameters = add(retracted_parameters, random_kick_parameters)
+    assert network_width(new_parameters) == width
+
+    # plt.plot(xs[0], prediction(parameters, xs)[0], "k-", lw=2)
+    # plt.plot(xs[0], prediction(new_parameters, xs)[0], "--", lw=1.5, color="tab:red")
+    # plt.show()
+
+    parameters = new_parameters
+    assert sum(p.size for p in parameters) == num_parameters
 
 
 # NOTE: If u is the update vector, then we want
@@ -818,4 +891,4 @@ plot_state(f"Terminal value  |  Loss: {latex_float(losses[-1], places=2)}  |  Ba
 
 
 A1, b1, A0, b0 = parameters
-jnp.savez("shallow_parameter.npz", A1=A1, b1=b1, A0=A0, b0=b0)
+jnp.savez("shallow_parameters.npz", A1=A1, b1=b1, A0=A0, b0=b0)
