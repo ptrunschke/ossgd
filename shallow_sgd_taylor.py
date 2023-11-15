@@ -1008,6 +1008,9 @@ for epoch in range(num_epochs):
             # Since the theory about convergence in expectation guarantees an exponential convergence to this bound.
             # Moreover, since s ∈ [0, smax], the step size that maximises descent(s, 0) is actually the largest s.
             # Finally, to ensure convergence, we do not choose a fixed bound to the bias but a decreasing sequence of bounds.
+            #
+            # This approach also has the pleasant property that we are not bound to a single connected component of the manifold.
+            # We can jump between different connected components as long as the retraction error is not too large.
 
             total_step = epoch * epoch_length + step
             retraction_threshold = min(Lip_0, 1 / (total_step + 1))
