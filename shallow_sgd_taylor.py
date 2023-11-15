@@ -200,29 +200,80 @@ import matplotlib.pyplot as plt
 # target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
 # target = lambda x: jnp.exp(x)
 target = lambda x: jnp.sin(2 * jnp.pi * x)
-target = lambda x: - jnp.pi * (jnp.euler_gamma - x)**2 + jnp.e
-activation = lambda x: jnp.maximum(x, 0)
+# target = lambda x: - jnp.pi * (jnp.euler_gamma - x)**2 + jnp.e
+p = 2
+activation = lambda x: jnp.maximum(x, 0)**p
 activation.__name__ = "ReLU"
 input_dimension = 1
 width = 20
+# width = 50
 # width = 100
 output_dimension = 1
 finite_difference = 0
-method = "NGD_quasi_projection"
-sample_size = 1
-sampling = "optimal"
-step_size_rule = "adaptive"
-num_epochs = 5
 epoch_length = 100
 Lip_0_sample_size_init = 10
 
+# experiment_label = f"NGD_optimal-samples_adaptive-steps_width-{width}"
+# method = "NGD_quasi_projection"
+# sampling = "optimal"
+# step_size_rule = "adaptive"
+# sample_size = 1
+# stable = False
+# num_epochs = 5
 
-plot_intermediate = True
-# plot_intermediate = False
+experiment_label = f"NGDP_optimal-samples_adaptive-steps_width-{width}"
+method = "NGD_projection"
+sampling = "optimal"
+step_size_rule = "adaptive"
+sample_size = 10 * width
+stable = True
+num_epochs = 5
+
+# experiment_label = f"NGD_optimal-samples_1e-3-steps_width-{width}"
+# method = "NGD_quasi_projection"
+# sampling = "optimal"
+# step_size_rule = "constant"
+# init_step_size = 1e-3
+# num_epochs = 5
+
+# experiment_label = f"NGD_uniform-samples_adaptive-steps_width-{width}"
+# method = "NGD_quasi_projection"
+# sampling = "uniform"
+# step_size_rule = "adaptive"
+# num_epochs = 50
+# num_epochs = 5
+
+# experiment_label = f"NGD_uniform-samples_1e-3-steps_width-{width}"
+# method = "NGD_quasi_projection"
+# sampling = "uniform"
+# step_size_rule = "constant"
+# init_step_size = 1e-3
+# num_epochs = 50
+# num_epochs = 5
+
+# experiment_label = f"SGD_uniform-samples_1e-3-steps_width-{width}"
+# method = "SGD"
+# sampling = "uniform"
+# step_size_rule = "constant"
+# init_step_size = 1e-3
+# num_epochs = 50
+# num_epochs = 5
+
+
+# plot_intermediate = True
+plot_intermediate = False
 gramian_quadrature_points = 1_000
 init = "random"
-init = "last_run"
-width = 40  # Increase the width by 20.
+# init = "last_run"
+# width += 20  # Increase the width by 20.
+Lip_0_sample_size_init = max(Lip_0_sample_size_init, sample_size)
+
+
+# TODO: When adapting the network, try the following:
+#         1. Retract the old network.
+#         2. Initialise a new random network such that the sum has appropriate width.
+#         3. Learn the residual of the old network with the new network.
+#         4. Add the new network to the old network.
 
 
 num_parameters = output_dimension + output_dimension * width + width + width * input_dimension
@@ -479,17 +530,29 @@ ws = jnp.ones((1000,))
 ys = target(xs)
 losses = []
 variation_constants = []
-def plot_state(title):
+if activation.__name__ == "ReLU":
+    knotxs = [[] for _ in range(width)]
+    knotys = [[] for _ in range(width)]
+step_sizes = []
+loss_estimates = []
+retraction_errors = []
+def plot_state(label):
     fig, ax = plt.subplots(1, 3, figsize=(14, 7))
 
     ax[0].plot(xs[0], ys[0], "k-", lw=2, label="target")
     zs = prediction(parameters, xs)
     ax[0].plot(xs[0], zs[0], "k--", lw=2, label="estimate")
+    ylim = ax[0].get_ylim()
     if activation.__name__ == "ReLU":
-        knots = -parameters[-1]
-        zs_knots = prediction(parameters, knots[None])
-        ax[0].plot(knots, zs_knots[0], "o", color="tab:red", label="spline knots")
+        for i in range(width):
+            if i == 0:
+                ax[0].plot(knotxs[i][-1:], knotys[i][-1:], "o-", markersize=6, fillstyle="full", color="tab:red", markeredgewidth=1.5, label="spline knots")
+            else:
+                ax[0].plot(knotxs[i][-1:], knotys[i][-1:], "o-", markersize=6, fillstyle="full", color="tab:red", markeredgewidth=1.5)
+            ax[0].plot(knotxs[i], knotys[i], "-", linewidth=1.5, color="tab:red")
+            ax[0].plot(knotxs[i][:1], knotys[i][:1], "o-", markersize=6, fillstyle="full", color="tab:red", markeredgewidth=1.5, markerfacecolor="white")
     ax[0].set_xlim(0, 1)
+    ax[0].set_ylim(*ylim)
     ax[0].legend()
     ax[0].set_title("Approximation")
 
@@ -503,13 +566,16 @@ def plot_state(title):
     ax[1].plot(xs[0], ks, "-", color="tab:red", lw=2, label=r"$\mathfrak{K}$")
     ax[1].set_xlim(0, 1)
     ax[1].legend(loc="upper right")
-    ax[1].set_title("Basis")
+    ax[1].set_title("Current basis")
 
     steps = onp.arange(1, len(losses) + 1)
     samples = Lip_0_sample_size_init + steps * sample_size
-    ax[2].plot(samples, losses, color="tab:blue", label="Loss")
+    ax[2].plot(samples, losses, color="tab:blue", label="loss")
     ax[2].plot(samples, variation_constants, color="tab:red", label=r"$\|\mathfrak{K}\|_{L^\infty}$")
-    xlim = Lip_0_sample_size_init + 1, Lip_0_sample_size_init + sample_size * num_epochs * epoch_length
+    ax[2].plot(samples, step_sizes, color="tab:purple", label="step size")
+    ax[2].plot(samples, loss_estimates, "--", color="tab:blue", label="loss estimate")
+    ax[2].plot(samples, retraction_errors, color="tab:orange", label="retraction error")
+    xlim = Lip_0_sample_size_init + sample_size, Lip_0_sample_size_init + sample_size * num_epochs * epoch_length
     ax[2].set_xlim(*xlim)
     ax[2].set_xscale("log")
     xticks = set(xlim)
@@ -535,8 +601,15 @@ def plot_state(title):
     ax[2].legend(loc="upper right")
     ax[2].set_title("Convergence")
 
+    if len(losses) > 0:
+        title = f"{label}  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}"
+    else:
+        title = f"{label}  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}  |  Basis dimension: {basis_dimension}"
     fig.suptitle(title)
-    plt.show()
+    label = label.lower().replace(" ", "-")
+    file_name = f"plots/{experiment_label}_{label}.png"
+    fig.tight_layout()
+    plt.savefig(file_name, dpi=300)
 
 
 def latex_float(value, places=2):
@@ -758,6 +831,7 @@ if init == "last_run":
     nz = jnp.nonzero(retracted_coefficients[:old_width])[0]
     retracted_parameters = retracted_coefficients[nz][None], 0 * parameters[1] + retracted_coefficients[old_width], parameters[2][nz], parameters[3][nz]
     assert network_width(retracted_parameters) == len(nz)
+    print(f"Loss: {loss(parameters, xs, ys, ws):.2e} → {loss(retracted_parameters, xs, ys, ws):.2e}")
 
     # plt.plot(xs[0], prediction(parameters, xs)[0], "k-", lw=2)
     # plt.plot(xs[0], prediction(retracted_parameters, xs)[0], "--", lw=1.5, color="tab:red")
@@ -791,41 +865,56 @@ if init == "last_run":
 #       Then, whenever we stagnate we can adapt the model class by increasing the width with a random kick.
 
 
-Lip_0 = None
 *_, basis_dimension = basis(parameters)
-if plot_intermediate:
-    plot_state(f"Initial value  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}  |  Basis dimension: {basis_dimension}")
+if activation.__name__ == "ReLU":
+    # A1 x + b1 == 0  <-->  x == -b1 / A1
+    knotx = -parameters[-1] / parameters[-2][:, 0]
+    assert knotx.shape == (width,)
+    knoty = prediction(parameters, knotx[None])[0]
+    for i in range(width):
+        knotxs[i].append(knotx[i])
+        knotys[i].append(knoty[i])
+plot_state(f"Initial value")
 for epoch in range(num_epochs):
     for step in range(epoch_length):
-        system = generating_system(parameters)
+        system, transform, basis_dimension = basis(parameters)
         gram = gramian(system)
-        basis_dimension = jnp.linalg.matrix_rank(gram)
         losses.append(true_loss(parameters))
 
-        training_key, key = jax.random.split(key, 2)
         assert input_dimension == 1
         osd = optimal_sampling_density(parameters)
         ps = osd(xs)
         variation_constants.append(jnp.max(ps) * basis_dimension)
 
         if sampling == "uniform":
+            training_key, key = jax.random.split(key, 2)
             xs_train = jax.random.uniform(training_key, (input_dimension, sample_size), minval=0, maxval=1)
             ws_train = jnp.ones((sample_size,))
         else:
             assert sampling == "optimal"
-            xs_train = jax.random.choice(training_key, xs[0], (sample_size,), replace=False, p=ps)[None]
-            ws_train = 1 / osd(xs_train)
+            stability_bound = 0.5
+            G = 0
+            I = jnp.eye(basis_dimension)
+            while jnp.linalg.norm(G - I, ord=2) > stability_bound:
+                training_key, key = jax.random.split(key, 2)
+                xs_train = jax.random.choice(training_key, xs[0], (sample_size,), replace=True, p=ps)[None]
+                ws_train = 1 / osd(xs_train)
+                if not stable:
+                    break
+                onb_measures = transform @ system(xs_train)
+                G = onb_measures * ws_train @ onb_measures.T / sample_size
         ys_train = target(xs_train)
 
-        ud = update_direction(parameters, xs, ys, ws)
+        ud = update_direction(parameters, xs_train, ys_train, ws_train)
 
         if step_size_rule == "constant":
             step_size = init_step_size
         elif step_size_rule == "constant_epoch":
             step_size = init_step_size / 10 ** max(epoch - limit_epoch + 1, 0)
         elif step_size_rule == "adaptive":
-            assert method == "NGD_quasi_projection"
-            L = 1  # Lipschitz smoothness constant for the least squares loss
+            # assert method == "NGD_quasi_projection"  # TODO: This is just relevant for the var_1, right?
+            L = 1   # Lipschitz smoothness constant for the least squares loss
+            mu = 1  # convexity constant for the least squares loss
             if sampling == "optimal":
                 V = basis_dimension
             else:
@@ -837,39 +926,133 @@ for epoch in range(num_epochs):
             smax = 1 / (L * var_1)
 
             # # Start with the most trivial case.
-            # def descent(s):
+            # def objective(s):
             #     return true_loss(updated_parameters(parameters, ud, s))
-            # res = osp.optimize.minimize_scalar(descent, bounds=(smin, smax), method="bounded")
+            # res = osp.optimize.minimize_scalar(objective, bounds=(smin, smax), method="bounded")
             # step_size = res.x
 
             # It holds that C(s) = Lip(s) * Curv(s) with
-            # Lip_0 = jnp.sqrt(2 * losses[-1])
-            if Lip_0 is None:
+            #     Lip(s) = jnp.sqrt(2 * losses[-1]) + L * s .
+            try:
+                Lip_0
+            except NameError:
                 Lip_0_sample_size = Lip_0_sample_size_init
                 xs_lip0 = jax.random.uniform(training_key, (input_dimension, Lip_0_sample_size), minval=0, maxval=1)
-                Lip_0 = 2 * loss(parameters, xs_lip0, target(xs_lip0), 1) + 1
-            Lip_0_sample_size += sample_size
-            relaxation = sample_size / Lip_0_sample_size
-            Lip_0 = (1 - relaxation) * Lip_0 + relaxation * loss(parameters, xs_train, ys_train, ws_train)
-            Lip = lambda s: Lip_0 + s
+                Lip_0 = loss(parameters, xs_lip0, target(xs_lip0), 1)
+            # === Option 1: Cumulative mean ===
+            # Lip_0_sample_size += sample_size
+            # relaxation = sample_size / Lip_0_sample_size
+            # Lip_0 = (1 - relaxation) * Lip_0 + relaxation * loss(parameters, xs_train, ys_train, ws_train)
+            # === Option 2: Exponentially weighted moving average ===
+            Lip_0 = 0.5 * Lip_0 + 0.5 * loss(parameters, xs_train, ys_train, ws_train)
 
-            ud_vec = jnp.concatenate([p.ravel() for p in ud])
-            ud_norm_squared = ud_vec.T @ gram @ ud_vec
-            xs_curv = jnp.linspace(0, 1, 1000).reshape(1, -1)
-            ys_curv = prediction(parameters, xs_curv)
-            def Curv(s):
-                # | prediction(updated_parameters(parameters, ud, s), ·) - prediction(parameters, ·) |
-                #     <= 0.5 * Curv(s) * s**2 * ud_norm_squared
-                ys_ref = prediction(updated_parameters(parameters, ud, s), xs_curv)
-                dist = jnp.trapz(jnp.sum((ys_ref - ys_curv)**2, axis=0), xs_curv[0])
-                return 2 * dist / (ud_norm_squared * s**2)
+            assert jnp.all(xs == jnp.linspace(0, 1, 1000).reshape(1, -1))
+            ys_0 = prediction(parameters, xs)
+            ys_update =  prediction(ud, xs)
+            assert ys_0.shape == ys_update.shape == (1, 1000)
+            def retraction_error(s):
+                ys_ret = prediction(updated_parameters(parameters, ud, s), xs)
+                ys_lin = ys_0 - s * ys_update
+                return jnp.sqrt(jnp.trapz(jnp.sum((ys_ret - ys_lin)**2, axis=0), xs[0]))
 
-            def descent(s):
-                C = Lip(s) * Curv(s)
+            # === Estimate the curvature ===
+            # ud_vec = jnp.concatenate([p.ravel() for p in ud])
+            # ud_norm_squared = ud_vec.T @ gram @ ud_vec
+            # def Curv(s):
+            #     return 2 * retraction_error(s) / (ud_norm_squared * s**2)
+
+            def descent(s, C=0):
                 return s - s**2 * (L + C) / 2 * var_1
 
-            res = osp.optimize.minimize_scalar(lambda s: -descent(s), bounds=(smin, smax), method="bounded")
-            step_size = res.x
+            # def objective(s):
+            #     Lip = jnp.sqrt(2 * Lip_0) + L * s
+            #     C = Lip * Curv(s)
+            #     sigma = descent(s, C)
+            #     return -sigma
+            # res = osp.optimize.minimize_scalar(objective, bounds=(smin, smax), method="bounded")
+            # step_size = res.x
+
+            # This approach works, but it has two drawbacks.
+            # 1. Let U(·) denote the parameter to function map,
+            #    θ the current parameter vector and d the parameters of the update direction.
+            #    It is true, that applying Taylor's theorem to
+            #        s ↦ U(θ + s * d)
+            #    yields the estimate
+            #        U(θ + s * d) = U(θ) + s * ∇U(θ) * d + O(s**2)
+            #    and hence
+            #        U(θ + s * d) - (U(θ) + s * ∇U(θ) * d) = O(s**2) .
+            #    So U indeed behaves quadratically in a neighbourhood of θ and we can compute the curvature.
+            #    However, this neighborhood may be extremely tiny.
+            # 2. Even if the curvature is not excessively tiny another problem arises due to the estimation
+            #    of the Lipschitz constant. The principal idea behind the preceding objective is that
+            #        b = descent(s, C) * norm(expectation(d))**2
+            #    is a lower bound for the descent of the algorithm in a step in direction d with step size s.
+            #    However,
+            #    - If Lip_0 is underestimated, then b is not a valid lower bound for the descent.
+            #    - If Lip_0 is overestimated, then b is a lower bound for the descent,
+            #      but in many cases this bound is trivial (i.e. negative).
+            #
+            # To sidestep this issue, note that maximising
+            #     sigma
+            #     = descent(s, C)
+            #     = s - s**2 * (L + C) / 2 * var_1
+            #     = s - s**2 * L / 2 * var_1 - s**2 * C / 2 * var_1
+            #     = descent(s, 0) - s**2 * C / 2 * var_1
+            # is equivalent to to maximising sigma * ud_norm_squared, which can be expressed as
+            #     descent(s, 0) * ud_norm_squared - Lip(s) * retraction_error(s) * var_1 .
+            # We could hence choose the step size as to maximise descent(s, 0)
+            # while interpreting the retraction error as an additional bias term
+            #     Lip(s) * retraction_error(s) * var_1 .
+            # We could hence chose the step size that maximises descent(s, 0),
+            # while satisfying a given bound on this bias term.
+            # Since the theory about convergence in expectation guarantees an exponential convergence to this bound.
+            # Moreover, since s ∈ [0, smax], the step size that maximises descent(s, 0) is actually the largest s.
+            # Finally, to ensure convergence, we do not choose a fixed bound to the bias but a decreasing sequence of bounds.
+
+            total_step = epoch * epoch_length + step
+            retraction_threshold = min(Lip_0, 1 / (total_step + 1))
+            # We want to find a point where
+            #     Lip(s) * retraction_error(s) * var_1 <= retraction_threshold .
+            # But we can do this only up to a certain relative tolerance rtol, i.e.
+            #     Lip(s) * retraction_error(s) * var_1 <= (1 + rtol) * retraction_threshold .
+            # This is not a problem when the upper bound is arbitrary.
+            # But we also would like to ensure that the retraction error is larger than the current loss estimate
+            # (intuitively, to ensure that a step can not have too large of an impact).
+            def root_objective(s, rtol):
+                Lip = jnp.sqrt(2 * Lip_0) + L * s
+                return Lip * retraction_error(s) * var_1 - retraction_threshold / (1 + rtol)
+
+            def bisect(a, b, rtol=0.5, error_b=None):
+                if error_b is None:
+                    error_b = root_objective(b, rtol)
+                if error_b <= 0:  # retraction_error(b) <= retraction_threshold
+                    return b
+                if abs(error_b) <= rtol * retraction_threshold:
+                    return b
+                m = (a + b) / 2
+                error_m = root_objective(m, rtol)
+                if error_m > 0:
+                    return bisect(a, m, rtol=rtol, error_b=error_m)
+                else:
+                    return bisect(m, b, rtol=rtol, error_b=error_b)
+            step_size = bisect(smin, smax)
+
+            try:
+                cumulative_a *= 1 - 2 * mu * descent(step_size)
+            except NameError:
+                cumulative_a = 1 - 2 * mu * descent(step_size)
+            print(f"    a = {cumulative_a:.2e}")
+            if cumulative_a < 1e-12:
+                try:
+                    k
+                except NameError:
+                    k = 0
+                k += 1
+                step_size = jnp.minimum(step_size, smax / k)
+
+            loss_estimates.append(Lip_0)
+            retraction_errors.append(retraction_error(step_size))
+            print(f"    retraction error = {(jnp.sqrt(2 * Lip_0) + step_size) * retraction_errors[-1] * var_1:.2e} < {retraction_threshold:.2e}")
 
         else:
             assert step_size_rule == "decreasing"
@@ -880,14 +1063,25 @@ for epoch in range(num_epochs):
 
         parameters = updated_parameters(parameters, ud, step_size)
 
+        step_sizes.append(step_size)
+        if activation.__name__ == "ReLU":
+            knotx = -parameters[-1] / parameters[-2][:, 0]
+            knoty = prediction(parameters, knotx[None])[0]
+            for i in range(width):
+                knotxs[i].append(knotx[i])
+                knotys[i].append(knoty[i])
+
         # NOTE: The gradient norm returned by updated_parameters(...) is not a valid indicator of a stationary point,
         #       since it is the L2 norm of the estimated projected gradient.
         #       This estiamte may not be zero even though the true projected gradient is.
         #       But estimating the true projected gradient is not feasible.
-        print(f"[{epoch+1:0{len(str(num_epochs))}d} | {step+1:0{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}")
+        if stable:
+            print(f"[{epoch+1:0{len(str(num_epochs))}d} | {step+1:0{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}  |  Stability: {jnp.linalg.norm(G - I, ord=2):.2f} ≤ {stability_bound:.2f}")
+        else:
+            print(f"[{epoch+1:0{len(str(num_epochs))}d} | {step+1:0{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}")
     if plot_intermediate is True:
-        plot_state(f"Epoch {epoch+1}  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
-plot_state(f"Terminal value  |  Loss: {latex_float(losses[-1], places=2)}  |  Basis dimension: {basis_dimension}")
+        plot_state(f"Epoch {epoch+1}")
+plot_state("Terminal value")
 
 
 A1, b1, A0, b0 = parameters
