@@ -30,7 +30,7 @@ args = parser.parse_args()
 try:
     args.step_size = float(args.step_size)
 except ValueError:
-    assert args.step_size in ["constant", "adaptive", "deterministic", "deterministic_unbounded", "nouy", "sls", "est"], args.step_size
+    assert args.step_size in ["constant", "adaptive", "deterministic", "deterministic_unbounded", "nouy", "sls", "est", "mixed"], args.step_size
 
 # xi_t = 1 / t^((1 + epsilon)/2)
 # epsilon = 0.1
@@ -211,6 +211,19 @@ print(f"Maximal step size: {maximal_step_size:.2e}")
 optimal_step_size = maximal_step_size / 2
 
 
+c = n / (d - 1)
+eps = jnp.finfo(jnp.float32).eps
+target_error = minimal_loss / loss(jnp.zeros(args.space_dimension))
+# t_max = min(54, int(np.ceil(np.log2(2 / target_error))))
+# TODO: target_error should really be interpreted as a target error
+#       and not necessarily as this unknown quantity we have here.
+# 2 (1 + c)^(-t) == max(target_error, eps)  <-->  t == ln(2 / max(target_error, eps)) / ln(1 + c)
+t_max = np.log(2 / max(target_error, eps)) / np.log(1 + c)
+t_max = int(np.ceil(t_max))
+assert (1+c)**(-t_max) <= max(target_error, eps)
+print(f"ε = {eps:.2e} → t_max = {t_max} → N = {t_max * n}")
+
+
 if args.step_size == "constant":
     def step_size(iteration, squared_gradient_norm):
         return optimal_step_size
@@ -220,6 +233,9 @@ elif args.step_size == "deterministic":
 elif args.step_size == "nouy":
     def step_size(iteration, squared_gradient_norm):
         return 1. / iteration**0.8
+elif args.step_size == "mixed":
+    def step_size(iteration, _):
+        return optimal_step_size / max(iteration - t_max, 1)
 elif args.step_size == "deterministic_unbounded":
     def step_size(iteration, squared_gradient_norm):
         return 1 / iteration**(1 - epsilon)
@@ -277,6 +293,8 @@ elif args.step_size == "est":
         return np.clip(a / (2*b), s_min, s_max)
         
 else:
+    assert isinstance(args.step_size, float)
+
     def step_size(iteration, _):
         return args.step_size
 
