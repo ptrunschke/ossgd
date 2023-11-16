@@ -327,6 +327,8 @@ for it in trange(1, args.iterations + 1, desc="Iteration"):
     # assert jnp.allclose(squared_gradient_norm, loss_gradient(estimate)(xs)**2 * ps @ integral_weights, atol=1e-4, rtol=1e-3)
     # assert jnp.allclose(0.5 * loss_gradient(estimate)(xs)**2 * ps @ integral_weights, loss(estimate), atol=1e-4, rtol=1e-3)
     kappas[it] = squared_gradient_norm / squared_projected_gradient_norm
+    # |Pg|^2 / |(I-P)g|^2 == (|(I-P)g|^2 / |Pg|^2)^{-1} == (|g|^2 / |Pg|^2 - 1)^{-1}
+    kappas[it] = 1 / (kappas[it] - 1)
 
     sample_key, key = jax.random.split(key, 2)
     points, weights, sample_stability = draw_sample(sample_key, args.sample_size, args.stability)
@@ -341,6 +343,12 @@ for it in trange(1, args.iterations + 1, desc="Iteration"):
         qp_update = jnp.linalg.solve(gramian, qp_update)
     descent[it] = qp_update @ (estimate - target_coefficients[:args.space_dimension])
     squared_gradient_norm_estimate = loss_gradient(estimate)(points)**2 @ weights
+
+    # test_points = jax.random.uniform(key, (100,), minval=-1, maxval=1)
+    # evaluate_gradient = evaluate_basis(test_points, estimate) - evaluate_basis(test_points, target_coefficients)
+    # evaluate_projected_gradient = evaluate_basis(test_points, qp_update)
+    # kappas[it] = jnp.linalg.norm(qp_update)**2 / jnp.mean((evaluate_gradient - evaluate_projected_gradient)**2)
+
     if args.step_size == "sls":
         step_size_key, key = jax.random.split(key, 2)
         s = step_size(key, estimate, qp_update)
@@ -368,12 +376,35 @@ ax.loglog(steps, errors - minimal_loss, color="tab:blue", label="loss")
 # ax.loglog(steps, 2 * (errors - minimal_loss) / jnp.linalg.norm(target_coefficients)**2, color="tab:blue", label="relative error")
 # ax.axhline(2 * minimal_loss / jnp.linalg.norm(target_coefficients)**2, color="tab:purple", label="relative bias limit")
 ax.loglog(steps, step_sizes, color="tab:orange", label="step size")
-# if args.step_size == "adaptive":
-#     cs = exponential_convergence_factor(step_sizes, kappas)
-#     ax.loglog(steps, cs, color="tab:purple", label="$c(\kappa)$")
+
+ax.loglog(steps[:-1], kappas[1:], color="tab:green", label=r"$\kappa$")
+if args.stability < 1 and args.projection == "least-squares":
+    bias_factor = jnp.sqrt(args.space_dimension / args.sample_size) / (1 - args.stability)
+    ax.axhline(bias_factor, lw=1, ls="--", color="tab:green", alpha=0.5)
+
 ax.loglog(steps, 1 / np.sqrt(steps), "k:", label="$t^{-1/2}$ rate")
 ax.loglog(steps, 1 / steps, "k-.", label="$t^{-1}$ rate")
-ax.axhline(minimal_loss, color="tab:red", linestyle="-.", label="minimal loss")
+ylim = ax.get_ylim()
+# Find all c such that ylim[0] <= c * minimal_loss <= ylim[1].
+# These are ylim[0] / minimal_loss <= c <= ylim[1] / minimal_loss
+c_min = int(np.ceil(ylim[0] / minimal_loss))
+c_max = int(np.floor(ylim[1] / minimal_loss))
+c_max = min(c_max, 15)
+for c in range(c_min, c_max):
+    ax.axhline(c * minimal_loss, color="tab:red", linestyle="--", linewidth=0.5, zorder=0)
+ax.axhline(c_max * minimal_loss, color="tab:red", linestyle="--", linewidth=0.5, zorder=0, label=fr"$\mathbb{{N}}_{{{c_max+1}}} \cdot (\text{{minimal loss}})$")  # label=r"$2\mathcal{L}_{\mathrm{min},\mathcal{M}}$")
+ax.axvline(t_max, color="tab:red", linestyle="--", linewidth=0.5, zorder=0)
+ax.set_xticks(ax.get_xticks().tolist() + [t_max])
+tick_index = np.where(ax.get_xticks() == t_max)[0]
+assert len(tick_index) == 1
+tick_index = tick_index[0]
+tick_labels = ax.get_xticklabels()
+tick_labels[tick_index].set_text(r"$\mathdefault{t_{\mathrm{max}}}$")
+tick_labels[tick_index].set_color("tab:red")
+tick_labels[tick_index].set_fontweight("bold")
+tick_labels[tick_index].set_horizontalalignment("left")
+tick_labels[tick_index].set_verticalalignment("top")
+ax.set_xticklabels(tick_labels)
 ax.set_xlabel("step")
 ax.set_xlim(steps[0], steps[-1])
 ax.legend(loc="lower left")
