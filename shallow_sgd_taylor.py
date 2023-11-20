@@ -1016,9 +1016,29 @@ for epoch in range(num_epochs):
             #
             # This approach also has the pleasant property that we are not bound to a single connected component of the manifold.
             # We can jump between different connected components as long as the retraction error is not too large.
+            #
+            # Note that, even though we do not use the bounded curvature property directly, it is still important.
+            # A bounded curvature guarantees that the retraction error decays with higher order.
+            # This means, that the bound
+            #     retraction_error(s) <= 1 / t^2
+            # guarantees that the algorithm converges almost surely (since t^{-2} is summable),
+            # but since the retraction error is of higher order, it does not imply that s must be summable.
+            # Hence we retain the Robbins--Monro property that s is not in l1.
 
             total_step = epoch * epoch_length + step
             retraction_threshold = min(Lip_0, 1 / (total_step + 1))
+            # retraction_threshold = min(Lip_0, 1 / (total_step + 1)**2)
+            # retraction_threshold = min(Lip_0, 1 / (total_step + 1)**1.5)
+            # TODO: Both do not work! --- Maybe the curvature is extremely large. Then we need a tiny step size.
+            #       Or it does not hold. In both cases, it seems a good idea to choose a threshold that does not
+            #       require the bounded curvature property!
+            # TODO: instead of heavy rejection based sampling, we could try 54 steps of an SGD with optimal step size.
+            # (We do this to find ONE linear update. Then we perform a single retraction step.)
+            # Actually, thats basically a good idea and maybe the reason why the algorithm currently does not work so well for quasi-projection.
+            # A single quasi-projection step does not provide much of a reduction.
+            # So if the retraction error is too large, we may not get convergence.
+            # Moreover, the algorithm seems to be very sensitive to the choice of the retraction threshold...
+
             # We want to find a point where
             #     Lip(s) * retraction_error(s) * var_1 <= retraction_threshold .
             # But we can do this only up to a certain relative tolerance rtol, i.e.
