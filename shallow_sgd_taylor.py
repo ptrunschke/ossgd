@@ -218,7 +218,7 @@ Lip_0_sample_size_init = 10
 # sampling = "optimal"
 # step_size_rule = "adaptive"
 # sample_size = 1
-# stable = False
+# stability_bound = None
 # num_epochs = 5
 
 experiment_label = f"NGDP_optimal-samples_adaptive-steps_width-{width}"
@@ -226,7 +226,7 @@ method = "NGD_projection"
 sampling = "optimal"
 step_size_rule = "adaptive"
 sample_size = 10 * width
-stable = True
+stability_bound = 0.5
 num_epochs = 5
 
 # experiment_label = f"NGD_optimal-samples_1e-3-steps_width-{width}"
@@ -609,6 +609,7 @@ def plot_state(label):
     label = label.lower().replace(" ", "-")
     file_name = f"plots/{experiment_label}_{label}.png"
     fig.tight_layout()
+    print(f"Saving convergence plot to '{file_name}'")
     plt.savefig(file_name, dpi=300)
 
 
@@ -886,23 +887,27 @@ for epoch in range(num_epochs):
         ps = osd(xs)
         variation_constants.append(jnp.max(ps) * basis_dimension)
 
+        I = jnp.eye(basis_dimension)
+        def stability(xs, ws):
+            onb_measures = transform @ system(xs)
+            G = onb_measures * ws @ onb_measures.T / len(ws)
+            return jnp.linalg.norm(G - I, ord=2)
+
         if sampling == "uniform":
             training_key, key = jax.random.split(key, 2)
             xs_train = jax.random.uniform(training_key, (input_dimension, sample_size), minval=0, maxval=1)
             ws_train = jnp.ones((sample_size,))
         else:
             assert sampling == "optimal"
-            stability_bound = 0.5
-            G = 0
-            I = jnp.eye(basis_dimension)
-            while jnp.linalg.norm(G - I, ord=2) > stability_bound:
+            while True:
                 training_key, key = jax.random.split(key, 2)
                 xs_train = jax.random.choice(training_key, xs[0], (sample_size,), replace=True, p=ps)[None]
                 ws_train = 1 / osd(xs_train)
-                if not stable:
+                if stability_bound is None:
                     break
-                onb_measures = transform @ system(xs_train)
-                G = onb_measures * ws_train @ onb_measures.T / sample_size
+                assert 0 < stability_bound < 1
+                if stability(xs_train, ws_train) < stability_bound:
+                    break
         ys_train = target(xs_train)
 
         ud = update_direction(parameters, xs_train, ys_train, ws_train)
@@ -1078,10 +1083,7 @@ for epoch in range(num_epochs):
         #       since it is the L2 norm of the estimated projected gradient.
         #       This estiamte may not be zero even though the true projected gradient is.
         #       But estimating the true projected gradient is not feasible.
-        if stable:
-            print(f"[{epoch+1:0{len(str(num_epochs))}d} | {step+1:0{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}  |  Stability: {jnp.linalg.norm(G - I, ord=2):.2f} ≤ {stability_bound:.2f}")
-        else:
-            print(f"[{epoch+1:0{len(str(num_epochs))}d} | {step+1:0{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}")
+        print(f"[{epoch+1:0{len(str(num_epochs))}d} | {step+1:0{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}  |  Stability: {stability(xs_train, ws_train):.2f}")
     if plot_intermediate is True:
         plot_state(f"Epoch {epoch+1}")
 plot_state("Terminal value")
