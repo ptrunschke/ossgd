@@ -1,5 +1,6 @@
 *.np[yz]
 *.png
+*.pdf
 .DS_Store
 micromamba
 .micromamba
