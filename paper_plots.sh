@@ -95,8 +95,32 @@ done
 #        LINEAR ON UNBOUNDED DOMAINS
 # ===========================================
 
-# show that Hermite polynomials really don't have exponential convergence (hopefully)
+# === (Non-)convergence for Hermite polynomials ===
+python linear_sgd_hermite.py \
+    -d 7 \
+    -T exp \
+    -t 10 \
+    -s deterministic_unbounded \
+    -Z optimal \
+    -z 7 \
+    -S inf \
+    -I random \
+    -i 10000 \
+    -p quasi
 
+for z in 1 21 70; do
+    python linear_sgd_hermite.py \
+        -d 7 \
+        -T exp \
+        -t 10 \
+        -s deterministic_unbounded \
+        -Z gaussian \
+        -z ${z} \
+        -S inf \
+        -I random \
+        -i 10000 \
+        -p quasi
+done
 
 # ===========================================
 #     SHALLOW NETWORKS ON COMPACT DOMAINS
