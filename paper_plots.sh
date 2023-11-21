@@ -2,22 +2,22 @@
 #         LINEAR ON COMPACT DOMAINS
 # ===========================================
 
-# # === Sublinear convergence ===
-# # ... for uniform and optimal sampling
-# for Z in uniform optimal; do
-#     python linear_sgd.py \
-#         -b legendre \
-#         -d 3 \
-#         -T sin \
-#         -t 10 \
-#         -s deterministic_unbounded \
-#         -Z ${Z} \
-#         -z 1 \
-#         -S inf \
-#         -I random \
-#         -i 100000 \
-#         -p quasi
-# done
+# === Sublinear convergence ===
+# ... for uniform and optimal sampling
+for Z in uniform optimal; do
+    python linear_sgd.py \
+        -b legendre \
+        -d 3 \
+        -T exp \
+        -t 10 \
+        -s deterministic_unbounded \
+        -Z ${Z} \
+        -z 1 \
+        -S inf \
+        -I random \
+        -i 100000 \
+        -p quasi
+done
 
 # === Exponential convergence ===
 # ... for uniform and optimal sampling
@@ -25,7 +25,7 @@ for Z in uniform optimal; do
     python linear_sgd.py \
         -b legendre \
         -d 3 \
-        -T sin \
+        -T exp \
         -t 10 \
         -s constant \
         -Z ${Z} \
@@ -42,7 +42,7 @@ for Z in uniform optimal; do
     python linear_sgd.py \
         -b legendre \
         -d 3 \
-        -T sin \
+        -T exp \
         -t 10 \
         -s mixed \
         -Z ${Z} \
@@ -59,7 +59,7 @@ for p in quasi least-squares; do
     python linear_sgd.py \
         -b legendre \
         -d 3 \
-        -T sin \
+        -T exp \
         -t 10 \
         -s constant \
         -Z optimal \
@@ -78,7 +78,7 @@ for S in 0.5 0.25 0.125 0.0625; do
         python linear_sgd.py \
             -b legendre \
             -d 3 \
-            -T sin \
+            -T exp \
             -t 10 \
             -s 1 \
             -Z optimal \

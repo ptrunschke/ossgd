@@ -132,15 +132,19 @@ else:
         for degree in range(dimension):
             basis_function = factors[degree] * Legendre.basis(degree)
             integrand = lambda x: 0.5 * basis_function(x) * function(x)
-            coefficients[degree], _ = integrate.quadrature(integrand, domain[0], domain[1], tol=1e-12, rtol=1e-12)
+            coefficients[degree], _ = integrate.quadrature(integrand, *domain, tol=1e-12, rtol=1e-12)
         return coefficients
 
-    target_coefficients = legendre_coefficients(np.exp, args.target_dimension)
+    target_coefficients = legendre_coefficients(target_function, args.target_dimension)
 
 loss_integrand = lambda v: lambda x: 0.5 * (evaluate_basis(x, v) - evaluate_basis(x, target_coefficients))**2
 loss_gradient = lambda v: lambda x: evaluate_basis(x, v) - evaluate_basis(x, target_coefficients)
 minimal_loss = 0.5 * jnp.linalg.norm(target_coefficients[args.space_dimension:])**2
 print(f"Minimal loss: {minimal_loss:.2e}")
+if args.target != "random":
+    approximation_loss = 0.5 * (target_function(xs) - evaluate_basis(xs, target_coefficients))**2 @ (ps * integral_weights)
+    print(f"Approximation loss: {approximation_loss:.2e}")
+    assert approximation_loss <= minimal_loss
 error = lambda v: 0.5 * jnp.linalg.norm(v - target_coefficients[:args.space_dimension])**2
 loss = lambda v: minimal_loss + error(v)
 
@@ -150,6 +154,7 @@ loss = lambda v: minimal_loss + error(v)
 assert 0 < args.stability
 assert args.stability == jnp.inf or args.sampling_strategy in ["optimal", "boosted"]
 if args.sampling_strategy in ["optimal", "boosted"]:
+    measures = evaluate_basis(xs, jnp.eye(args.space_dimension))
     pdf = jnp.sum(measures ** 2, axis=1) * ps
     cdf = jnp.cumsum(integral_weights * pdf)
     pdf /= cdf[-1]
