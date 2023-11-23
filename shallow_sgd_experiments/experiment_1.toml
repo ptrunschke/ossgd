@@ -1,0 +1,36 @@
+# ====================
+# Experiment 1
+# ====================
+target = "sin"
+input_dimension = 1
+width = 10
+output_dimension = 1
+activation = "tanh"
+finite_difference = 0
+method = "NGD_quasi_projection"
+sample_size = 10
+sampling = "uniform"
+num_epochs = 10
+epoch_length = 100
+step_size_rule = "constant"
+init_step_size = 0.01
+### Running the code with these parameters, we see that
+###   - the algorithm following the gradient flow and
+###   - the algorithm reaches a stationaty point in the manifold
+###     with an error of about 8e-6.
+### To verify these two claims, we can rerun the optimisation with a smaller
+### step size and check if we obtain the same error curve.
+### Uncomment the following lines to perform this experiment.
+# num_epochs = 100
+# init_step_size = 0.001
+### The algorithm reaches an error of 3e-6, which is slightly smaller but this
+### is probably due to a reduced bias.
+### An intuitive idea to increase performance is to use a larger step size in
+### the begining and then decrease the step size. Interestingly, however, the GD
+### converges to another, suboptimal stationary point in these first iterations
+### and can not escape this point when the step size is reduced in later.
+### Uncomment the following lines to perform this experiment.
+# num_epochs = 10
+# init_step_size = 0.1
+# step_size_rule = "decreasing"
+# limit_epoch = 4

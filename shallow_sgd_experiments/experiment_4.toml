@@ -1,0 +1,31 @@
+# ====================
+# Experiment 4
+# ====================
+### Although the SGD in Experiment 3 seems to converge to the same local minimum
+### with or without optimal sampling, this stationary point is different from
+### the stationary point that is reached with NGD. These abundance of local mi-
+### nima makes it extremely difficult to compare the two algorihtms and this can
+### also happen while using the same NGD algorithm but with different sampling
+### methods.
+### This is demonstrated in this experiment.
+target = "step"
+input_dimension = 1
+width = 10
+output_dimension = 1
+activation = "tanh"
+finite_difference = 0
+method = "NGD_quasi_projection"
+sample_size = 300
+sampling = "uniform"
+### Uncomment the following line to perform this experiment.
+# sampling = "optimal"
+num_epochs = 15
+step_size_rule = "decreasing"
+limit_epoch = 2
+init_step_size = 1
+epoch_length = 100
+### That we are at a stationary point can be seen that the gradient norm conver-
+### ges to zero. Maybe contrary to the intuition, the dimension of the tangent
+### space is not a valid indicator of a global stationary point, since there
+### exists no global minimiser (the model class is not closed) and the limit can
+### be reached with many different parameterisations.

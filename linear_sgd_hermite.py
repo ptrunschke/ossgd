@@ -369,6 +369,7 @@ else:
         estimate -= s * qp_update
         errors[it] = loss(estimate)
 
+    print("Saving convergence data to", data_path)
     np.savez_compressed(data_path, errors=errors, minimal_loss=minimal_loss, kappas=kappas, step_sizes=step_sizes)
 
 fig, ax = plt.subplots(1, 1, figsize=(4, 4), dpi=300)

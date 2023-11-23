@@ -1,0 +1,24 @@
+# ====================
+#     Experiment 2
+# ====================
+target = "sin"
+input_dimension = 1
+width = 10
+output_dimension = 1
+### Using a larger width means that the approximation error is smaller.
+### But we observe that with the previously well-chosen step size 0.01,
+### the parameters converge to a suboptimal stationary point (loss: 1e-1),
+### which chould also be achieved with width 10 (basis dimension == 3).
+### Actually, not even width 10 achieves a global minimum,
+### since the tangent space at the stationary point is still 7-dimensional.
+### Uncomment the following line to perform this experiment.
+# width = 100
+activation = "tanh"
+finite_difference = 0
+method = "NGD_quasi_projection"
+sample_size = 10
+sampling = "uniform"
+num_epochs = 10
+epoch_length = 100
+step_size_rule = "constant"
+init_step_size = 0.01

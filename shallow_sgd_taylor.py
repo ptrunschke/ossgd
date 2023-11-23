@@ -1,3 +1,7 @@
+import argparse
+import tomllib
+from pathlib import Path
+
 import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
@@ -5,270 +9,141 @@ import jax.scipy as jsp
 import numpy as onp
 import scipy as osp
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 
+mpl.rc("font", size=10, family="Times New Roman")
+mpl.rc("text", usetex=True)
+mpl.rc(
+    "text.latex",
+    preamble=r"""
+    \usepackage{newtxmath}
+    \usepackage{amsmath}
+    \usepackage{bbm}
+""",
+)
 
-# # ====================
-# # Experiment 1
-# # ====================
-# target = lambda x: jnp.sin(2 * jnp.pi * x)
-# input_dimension = 1
-# width = 10
-# output_dimension = 1
-# activation = lambda x: (jnp.tanh(x) + 1) / 2
-# finite_difference = 0
-# method = "NGD_quasi_projection"
-# sample_size = 10
-# sampling = "uniform"
-# num_epochs = 10
-# epoch_length = 100
-# step_size_rule = "constant"
-# init_step_size = 0.01
-# # NOTE: Running the code with these parameters, we see that
-# #         - the algorithm following the gradient flow and
-# #         - the algorithm reaches a stationaty point in the manifold with an error of about 8e-6.
-# #       To verify these two claims, we can rerun the optimisation with a smaller step size
-# #       and check if we obtain the same error curve.
-# # TODO: Uncomment the following lines to perform this experiment.
-# # num_epochs = 100
-# # init_step_size = 0.001
-# # TODO: But we reach a smaller error of 3e-6!
-# # NOTE: An intuitive idea to increase performance is to use a larger step size in the begining
-# #       and then decrease the step size. Interestingly, however, the GD converges to another,
-# #       suboptimal stationary point in these first iterations and can not escape this point
-# #       when the step size is reduced in later.
-# # TODO: Uncomment the following lines to perform this experiment.
-# # num_epochs = 10
-# # init_step_size = 0.1
-# # step_size_rule = "decreasing"
-# # limit_epoch = 4
-# # NOTE: In the first two experiments, we have seen that the basis functions of the tanh-activation
-# #       look like polynomials of bounded degree. Consequently, the optimal sampling density looks
-# #       very similar to the Legendre case. This happens due to the random initialisation
-# #       and only remains during the optimisation if the approximation remains sufficiently smooth.
-# #       This final example, however, produces an approximation with discontinuities
-# #       and the optimal density becomes very peaky around the jump points.
-# #       This must also happen for the non-continuous target functions for which neural networks
-# #       achieve more advantageous approximation rates than classical approximation classes.
-# #       (see Experiment 3)
+parser = argparse.ArgumentParser(
+    description="Create a convergence plot for SGD/NGD on shallow neural networks.",
+)
+parser.add_argument("config", help="config file containing the parameters")
+args = parser.parse_args()
 
+config_file = Path(args.config)
+print(f"Config: {config_file}")
+with open(args.config, "rb") as f:
+    parameters = tomllib.load(f)
 
-# # ====================
-# #     Experiment 2
-# # ====================
-# target = lambda x: jnp.sin(2 * jnp.pi * x)
-# input_dimension = 1
-# width = 10
-# output_dimension = 1
-# # NOTE: Using a larger width means that the approximation error is smaller.
-# #       But we observe that with the previously well-chosen step size 0.01,
-# #       the parameters converge to a suboptimal stationary point (loss: 1e-1),
-# #       which chould also be achieved with width 10 (basis dimension == 3).
-# #       Actually, not even width 10 achieves a global minimum,
-# #       since the tangent space at the stationary point is still 7-dimensional.
-# # TODO: Uncomment the following line to perform this experiment.
-# # width = 100
-# activation = lambda x: (jnp.tanh(x) + 1) / 2
-# finite_difference = 0
-# method = "NGD_quasi_projection"
-# sample_size = 10
-# sampling = "uniform"
-# num_epochs = 10
-# epoch_length = 100
-# step_size_rule = "constant"
-# init_step_size = 0.01
+target = parameters.pop("target")
+assert isinstance(target, str)
+if target == "sin":
+    target = lambda x: jnp.sin(2 * jnp.pi * x)
+elif target == "step":
+    target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
+else:
+    target = getattr(jnp, target)
 
+activation = parameters.pop("activation")
+assert isinstance(activation, str)
+if activation == "tanh":
+    activation = lambda x: (jnp.tanh(x) + 1) / 2
+    activation.__name__ = "tanh"
+elif activation.startswith("relu"):
+    assert activation[4] == "_"
+    power = int(activation[5:])
+    assert power > 0
+    activation = lambda x: jnp.maximum(x, 0) ** power
+    activation.__name__ = f"relu_{power}"
+else:
+    activation = getattr(jnp, activation)
 
-# # ====================
-# # Experiment 3
-# # ====================
-# # NOTE: In the preceding experiments, we have seen that the basis functions of the tanh-activation
-# #       look like polynomials of bounded degree. Consequently, the optimal sampling density looks
-# #       very similar to the Legendre case. But this happens due to the random initialisation
-# #       and only remains during the optimisation for the smooth sin target and when the approximation remains smooth.
-# #       For the step function target, the optimal density becomes more and more peaky around the jump point.
-# target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
-# input_dimension = 1
-# width = 10
-# output_dimension = 1
-# activation = lambda x: (jnp.tanh(x) + 1) / 2
-# finite_difference = 0
-# method = "NGD_quasi_projection"
-# sample_size = 10
-# sampling = "uniform"
-# num_epochs = 20
-# step_size_rule = "decreasing"
-# limit_epoch = 7
-# init_step_size = 0.01
-# # NOTE: We can use a larger initial step size but reach another stationary point.
-# # TODO: Uncomment the following lines to perform this experiment.
-# # init_step_size = 1
-# # epoch_length = 100
-# # NOTE: The L∞-norm of the inverse Christoffel function becomes extremely large (≈150).
-# #       In this situation optimal sampling reduces the variance and speeds up convergence.
-# #       Since convergence is faster, we can transition earlyer to an decreasing step size
-# #       and also need fever epochs.
-# # TODO: Uncomment the following lines to perform this experiment.
-# # sampling = "optimal"
-# # num_epochs = 10
-# # limit_epoch = 4
-# # NOTE: Finally, we show that standard SGD can not achieve these speeds, with or without optimal sampling.
-# # TODO: Successively uncomment the following two lines to perform these two experiments.
-# # method = "SGD"
-# # sampling = "uniform"
+input_dimension = parameters.pop("input_dimension")
+assert isinstance(input_dimension, int) and input_dimension == 1
+width = parameters.pop("width")
+assert isinstance(width, int) and width >= 1
+output_dimension = parameters.pop("output_dimension")
+assert isinstance(output_dimension, int) and output_dimension == 1
+
+finite_difference = parameters.pop("finite_difference")
+assert isinstance(finite_difference, (int, float)) and finite_difference >= 0
+
+num_epochs = parameters.pop("num_epochs")
+assert isinstance(num_epochs, int) and num_epochs > 0
+epoch_length = parameters.pop("epoch_length")
+assert isinstance(epoch_length, int) and epoch_length > 0
+
+sampling = parameters.pop("sampling")
+assert isinstance(sampling, str)
+sample_size = parameters.pop("sample_size")
+assert isinstance(sample_size, int) and sample_size > 0
+loss_estimate_sample_size_init = parameters.pop("loss_estimate_sample_size_init")
+assert isinstance(loss_estimate_sample_size_init, int) and loss_estimate_sample_size_init > 0
+
+method = parameters.pop("method")
+assert isinstance(method, str)
+step_size_rule = parameters.pop("step_size_rule")
+assert isinstance(step_size_rule, str)
+stability_bound = parameters.pop("stability_bound", float("inf"))
+assert isinstance(stability_bound, (int, float)) and stability_bound > 0
+
+label = parameters.pop("label", "")
+assert isinstance(label, str)
+label = label.format(**globals())
+print(f"Label: {label}")
+
+assert len(parameters) == 0
+del args, parameters
+
+base_path = config_file.parent
+assert config_file.suffixes == [".toml"]
+base_name = config_file.stem
+assert config_file == base_path / Path(base_name).with_suffix(".toml")
+if label:
+    base_name = base_name + "_" + label
+base_name = Path(base_name)
+
+data_path = base_path / "data"
+data_path.mkdir(exist_ok=True)
+data_path /= base_name.with_suffix(".npz")
+
+plot_path = base_path / "plot"
+plot_path.mkdir(exist_ok=True)
+plot_path /= base_name.with_suffix(".pdf")
 
 
-# # ====================
-# # Experiment 4
-# # ====================
-# # NOTE: Although the SGD in Experiment 3 seems to converge to the same local minimum with or without optimal sampling,
-# #       this stationary point is different from the stationary point that is reached with NGD.
-# #       These abundance of local minima makes it extremely difficult to compare the two algorihtms
-# #       and this can also happen while using the same NGD algorithm but with different sampling methods.
-# #       This is demonstrated in this experiment.
-# target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
-# input_dimension = 1
-# width = 10
-# output_dimension = 1
-# activation = lambda x: (jnp.tanh(x) + 1) / 2
-# finite_difference = 0
-# method = "NGD_quasi_projection"
-# sample_size = 300
-# sampling = "uniform"
-# # TODO: Uncomment the following line to perform this experiment.
-# # sampling = "optimal"
-# num_epochs = 15
-# step_size_rule = "decreasing"
-# limit_epoch = 2
-# init_step_size = 1
-# epoch_length = 100
-# # NOTE: That we are at a stationary point can be seen that the gradient norm converges to zero.
-# #       Maybe contrary to the intuition, the dimension of the tangent space is not a valid
-# #       indicator of a global stationary point, since there exists no global minimiser
-# #       (the model class is not closed) and the limit can be reached with many different parameterisations.
+#TODO: - organise the config files in sections
+#      - use the section names as labels for the experiments
+#        import string
+#        def valid_stem(str):
+#            valid_chars = "-_ " + string.ascii_letters + string.digits
+#            filename = ''.join(c for c in s if c in valid_chars)
+#            filename = filename.replace(' ','_')
+#            return filename
+#      - or: use sections to organise certain settings, e.g. step_size_rule and corresponding parameters
+#      - or: use sections to organise different experiemtns in a single file all of these are then executed in one run.
 
 
-# # ====================
-# # Experiment 5
-# # ====================
-# # NOTE: Finally, we try a sample size of 1 and decrease the step size from the beginning.
-# target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
-# input_dimension = 1
-# width = 10
-# output_dimension = 1
-# activation = lambda x: (jnp.tanh(x) + 1) / 2
-# finite_difference = 0
-# method = "NGD_quasi_projection"
-# sample_size = 1
-# sampling = "optimal"
-# num_epochs = 15
-# step_size_rule = "decreasing"
-# limit_epoch = 0
-# init_step_size = 1
-# epoch_length = 100
+# - implement different choices for the sample size
+# - implement different choices to estimate the step step_size:
+#     - estimate the curvature with the correct Lip (depending on the retraction error and not on the step_size)
+#     - have a bounded bias term (like it is currently done)
+#     - an estimated bias also induces a decay of the step size (s = 1/t).
+#       Maybe we achieve the same rates with the step size sequece s = 1/t directly?
+# - Run experiments for all three cases.
+# - Also run an experiment for SGD.
 
 
-# # ====================
-# # Experiment 6
-# # ====================
-# # NOTE: Here we try a ReLU activation.
-# # target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
-# # target = lambda x: jnp.exp(x)  # Reaches an error of 4e-6
-# # num_epochs = 30
-# target = lambda x: jnp.sin(2 * jnp.pi * x)  # Reaches an error of 2e-4
-# num_epochs = 15
-# activation = lambda x: jnp.maximum(x, 0)
-# input_dimension = 1
-# width = 20
-# output_dimension = 1
-# finite_difference = 0
-# method = "NGD_quasi_projection"
-# # method = "SGD"
-# sample_size = 1
-# sampling = "optimal"
-# # step_size_rule = "decreasing"
-# step_size_rule = "constant"
-# limit_epoch = 0
-# init_step_size = 0.001
-# epoch_length = 500
-
-
-# ====================
-# Experiment 7
-# ====================
-# NOTE: Try to select the step size adaptively.
-# target = lambda x: 1e-4 + (x <= (1 / jnp.pi))
-# target = lambda x: jnp.exp(x)
-target = lambda x: jnp.sin(2 * jnp.pi * x)
-# target = lambda x: - jnp.pi * (jnp.euler_gamma - x)**2 + jnp.e
-p = 2
-activation = lambda x: jnp.maximum(x, 0)**p
-activation.__name__ = "ReLU"
-input_dimension = 1
-width = 20
-# width = 50
-# width = 100
-output_dimension = 1
-finite_difference = 0
-epoch_length = 100
-Lip_0_sample_size_init = 10
-
-# experiment_label = f"NGD_optimal-samples_adaptive-steps_width-{width}"
-# method = "NGD_quasi_projection"
-# sampling = "optimal"
-# step_size_rule = "adaptive"
-# sample_size = 1
-# stability_bound = None
-# num_epochs = 5
-
-experiment_label = f"NGDP_optimal-samples_adaptive-steps_width-{width}"
-method = "NGD_projection"
-sampling = "optimal"
-step_size_rule = "adaptive"
-sample_size = 10 * width
-stability_bound = 0.5
-num_epochs = 5
-
-# experiment_label = f"NGD_optimal-samples_1e-3-steps_width-{width}"
-# method = "NGD_quasi_projection"
-# sampling = "optimal"
-# step_size_rule = "constant"
-# init_step_size = 1e-3
-# num_epochs = 5
-
-# experiment_label = f"NGD_uniform-samples_adaptive-steps_width-{width}"
-# method = "NGD_quasi_projection"
-# sampling = "uniform"
-# step_size_rule = "adaptive"
-# num_epochs = 50
-# num_epochs = 5
-
-# experiment_label = f"NGD_uniform-samples_1e-3-steps_width-{width}"
-# method = "NGD_quasi_projection"
-# sampling = "uniform"
-# step_size_rule = "constant"
-# init_step_size = 1e-3
-# num_epochs = 50
-# num_epochs = 5
-
-# experiment_label = f"SGD_uniform-samples_1e-3-steps_width-{width}"
-# method = "SGD"
-# sampling = "uniform"
-# step_size_rule = "constant"
-# init_step_size = 1e-3
-# num_epochs = 50
-# num_epochs = 5
-
-
-# plot_intermediate = True
-plot_intermediate = False
+L = 1   # Lipschitz smoothness constant for the least squares loss
+mu = 1  # convexity constant for the least squares loss
+plot_intermediate = True
 gramian_quadrature_points = 1_000
 init = "random"
 # init = "last_run"
 # width += 20  # Increase the width by 20.
-Lip_0_sample_size_init = max(Lip_0_sample_size_init, sample_size)
+loss_estimate_sample_size_init = max(loss_estimate_sample_size_init, sample_size)
 
 
+# TODO: Try alternating optimisation?
 # TODO: When adapting the network, try the following:
 #         1. Retract the old network.
 #         2. Initialise a new random network such that the sum has appropriate width.
@@ -530,7 +405,7 @@ ws = jnp.ones((1000,))
 ys = target(xs)
 losses = []
 variation_constants = []
-if activation.__name__ == "ReLU":
+if activation.__name__.startswith("relu"):
     knotxs = [[] for _ in range(width)]
     knotys = [[] for _ in range(width)]
 step_sizes = []
@@ -543,7 +418,7 @@ def plot_state(label):
     zs = prediction(parameters, xs)
     ax[0].plot(xs[0], zs[0], "k--", lw=2, label="estimate")
     ylim = ax[0].get_ylim()
-    if activation.__name__ == "ReLU":
+    if activation.__name__.startswith("relu"):
         for i in range(width):
             if i == 0:
                 ax[0].plot(knotxs[i][-1:], knotys[i][-1:], "o-", markersize=6, fillstyle="full", color="tab:red", markeredgewidth=1.5, label="spline knots")
@@ -569,13 +444,13 @@ def plot_state(label):
     ax[1].set_title("Current basis")
 
     steps = onp.arange(1, len(losses) + 1)
-    samples = Lip_0_sample_size_init + steps * sample_size
-    ax[2].plot(samples, losses, color="tab:blue", label="loss")
+    samples = loss_estimate_sample_size_init + steps * sample_size
     ax[2].plot(samples, variation_constants, color="tab:red", label=r"$\|\mathfrak{K}\|_{L^\infty}$")
+    ax[2].plot(samples, retraction_errors, color="tab:orange", label="retraction error")
     ax[2].plot(samples, step_sizes, color="tab:purple", label="step size")
     ax[2].plot(samples, loss_estimates, "--", color="tab:blue", label="loss estimate")
-    ax[2].plot(samples, retraction_errors, color="tab:orange", label="retraction error")
-    xlim = Lip_0_sample_size_init + sample_size, Lip_0_sample_size_init + sample_size * num_epochs * epoch_length
+    ax[2].plot(samples, losses, color="tab:blue", label="loss")
+    xlim = loss_estimate_sample_size_init + sample_size, loss_estimate_sample_size_init + sample_size * num_epochs * epoch_length
     ax[2].set_xlim(*xlim)
     ax[2].set_xscale("log")
     xticks = set(xlim)
@@ -606,11 +481,32 @@ def plot_state(label):
     else:
         title = f"{label}  |  Loss: {latex_float(loss(parameters, xs, ys, ws), places=2)}  |  Basis dimension: {basis_dimension}"
     fig.suptitle(title)
-    label = label.lower().replace(" ", "-")
-    file_name = f"plots/{experiment_label}_{label}.png"
-    fig.tight_layout()
-    print(f"Saving convergence plot to '{file_name}'")
-    plt.savefig(file_name, dpi=300)
+    print(f"Saving convergence plot to '{plot_path}'")
+    plt.savefig(
+        plot_path, dpi=300, edgecolor="none", bbox_inches="tight", transparent=True
+    )
+
+
+def save_state():
+    print(f"Saving convergence data to '{data_path}'")
+    A1, b1, A0, b0 = parameters
+    knts = {}
+    if activation.__name__.startswith("relu"):
+        knts["knotxs"] = knotxs
+        knts["knotys"] = knotys
+    jnp.savez(data_path,
+              A1=A1,
+              b1=b1,
+              A0=A0,
+              b0=b0,
+              activation=activation.__name__,
+              losses=losses,
+              variation_constants=variation_constants,
+              loss_estimates=loss_estimates,
+              retraction_errors=retraction_errors,
+              step_sizes=step_sizes,
+              **knts
+    )
 
 
 def latex_float(value, places=2):
@@ -867,7 +763,7 @@ if init == "last_run":
 
 
 *_, basis_dimension = basis(parameters)
-if activation.__name__ == "ReLU":
+if activation.__name__.startswith("relu"):
     # A1 x + b1 == 0  <-->  x == -b1 / A1
     knotx = -parameters[-1] / parameters[-2][:, 0]
     assert knotx.shape == (width,)
@@ -875,7 +771,14 @@ if activation.__name__ == "ReLU":
     for i in range(width):
         knotxs[i].append(knotx[i])
         knotys[i].append(knoty[i])
+
+loss_estimate_key, key = jax.random.split(key, 2)
+loss_estimate_sample_size = loss_estimate_sample_size_init
+xs_le0 = jax.random.uniform(loss_estimate_key, (input_dimension, loss_estimate_sample_size), minval=0, maxval=1)
+loss_estimate = loss(parameters, xs_le0, target(xs_le0), 1)
+
 plot_state(f"Initial value")
+save_state()
 for epoch in range(num_epochs):
     for step in range(epoch_length):
         system, transform, basis_dimension = basis(parameters)
@@ -903,80 +806,92 @@ for epoch in range(num_epochs):
                 training_key, key = jax.random.split(key, 2)
                 xs_train = jax.random.choice(training_key, xs[0], (sample_size,), replace=True, p=ps)[None]
                 ws_train = 1 / osd(xs_train)
-                if stability_bound is None:
+                if stability_bound == jnp.inf:
                     break
                 assert 0 < stability_bound < 1
                 if stability(xs_train, ws_train) < stability_bound:
                     break
         ys_train = target(xs_train)
 
+        # === Option 1: Cumulative mean ===
+        # loss_estimate_sample_size += sample_size
+        # relaxation = sample_size / loss_estimate_sample_size
+        # loss_estimate = (1 - relaxation) * loss_estimate + relaxation * loss(parameters, xs_train, ys_train, ws_train)
+        # === Option 2: Exponentially weighted moving average ===
+        loss_estimate = 0.5 * loss_estimate + 0.5 * loss(parameters, xs_train, ys_train, ws_train)
+        # === Option 3: Windowed moving average ===
+        # try:
+        #     partial_loss_estimates.append(loss(parameters, xs_train, ys_train, ws_train))
+        # except:
+        #     partial_loss_estimates = loss_estimates[:]
+        #     partial_loss_estimates.append(loss(parameters, xs_train, ys_train, ws_train))
+        # partial_loss_estimates = partial_loss_estimates[-10:]
+        # loss_estimate = onp.mean(partial_loss_estimates)
+        loss_estimates.append(loss_estimate)
+
         ud = update_direction(parameters, xs_train, ys_train, ws_train)
+        assert jnp.all(xs == jnp.linspace(0, 1, 1000).reshape(1, -1))
+        ys_0 = prediction(parameters, xs)
+        ys_update =  prediction(ud, xs)
+        assert ys_0.shape == ys_update.shape == (1, 1000)
+        def retraction_error(s):
+            ys_ret = prediction(updated_parameters(parameters, ud, s), xs)
+            ys_lin = ys_0 - s * ys_update
+            return jnp.sqrt(jnp.trapz(jnp.sum((ys_ret - ys_lin)**2, axis=0), xs[0]))
+
+        def Lip(s):
+            return jnp.sqrt(2 * loss_estimate) + retraction_error(s)
+
+        if sampling == "optimal":
+            V = basis_dimension
+        else:
+            V = variation_constants[-1]
+        if method == "SGD":
+            es = jnp.linalg.svd(gram)[1]
+            lmin, lmax = es.min(), es.max()
+            var_1 = (lmax**2 * (sample_size - 1) + lmax * V) / sample_size
+        elif method == "NGD_quasi_projection":
+            var_1 = (sample_size + V - 1) / sample_size
+        elif method == "NGD_projection":
+            assert stability_bound < 1
+            var_1 = (sample_size + V - 1) / sample_size / (1 - stability_bound)**2
+        else:
+            raise NotImplementedError
+        smin = 0
+        smax = 1 / (L * var_1)
+        def descent(s, C=0):
+            return s - s**2 * (L + C) / 2 * var_1
 
         if step_size_rule == "constant":
             step_size = init_step_size
         elif step_size_rule == "constant_epoch":
             step_size = init_step_size / 10 ** max(epoch - limit_epoch + 1, 0)
-        elif step_size_rule == "adaptive":
-            # assert method == "NGD_quasi_projection"  # TODO: This is just relevant for the var_1, right?
-            L = 1   # Lipschitz smoothness constant for the least squares loss
-            mu = 1  # convexity constant for the least squares loss
-            if sampling == "optimal":
-                V = basis_dimension
-            else:
-                V = variation_constants[-1]
-            var_1 = (sample_size + V - 1) / sample_size
+        elif step_size_rule == "adaptive_optimal":  # This is the most trivial case.
+            def objective(s):
+                return true_loss(updated_parameters(parameters, ud, s))
+            res = osp.optimize.minimize_scalar(objective, bounds=(smin, smax), method="bounded")
+            step_size = res.x
+        elif step_size_rule == "adaptive_curvature":
             # Recall the descent factor σ = s - s**2 * (L+C)/2 * var_1 .
             # The step size must be larger than 0 and σ is maximised for C=0 and s=1/(L*var_1).
-            smin = 0
-            smax = 1 / (L * var_1)
-
-            # # Start with the most trivial case.
-            # def objective(s):
-            #     return true_loss(updated_parameters(parameters, ud, s))
-            # res = osp.optimize.minimize_scalar(objective, bounds=(smin, smax), method="bounded")
-            # step_size = res.x
 
             # It holds that C(s) = Lip(s) * Curv(s) with
             #     Lip(s) = jnp.sqrt(2 * losses[-1]) + L * s .
-            try:
-                Lip_0
-            except NameError:
-                Lip_0_sample_size = Lip_0_sample_size_init
-                xs_lip0 = jax.random.uniform(training_key, (input_dimension, Lip_0_sample_size), minval=0, maxval=1)
-                Lip_0 = loss(parameters, xs_lip0, target(xs_lip0), 1)
-            # === Option 1: Cumulative mean ===
-            # Lip_0_sample_size += sample_size
-            # relaxation = sample_size / Lip_0_sample_size
-            # Lip_0 = (1 - relaxation) * Lip_0 + relaxation * loss(parameters, xs_train, ys_train, ws_train)
-            # === Option 2: Exponentially weighted moving average ===
-            Lip_0 = 0.5 * Lip_0 + 0.5 * loss(parameters, xs_train, ys_train, ws_train)
-
-            assert jnp.all(xs == jnp.linspace(0, 1, 1000).reshape(1, -1))
-            ys_0 = prediction(parameters, xs)
-            ys_update =  prediction(ud, xs)
-            assert ys_0.shape == ys_update.shape == (1, 1000)
-            def retraction_error(s):
-                ys_ret = prediction(updated_parameters(parameters, ud, s), xs)
-                ys_lin = ys_0 - s * ys_update
-                return jnp.sqrt(jnp.trapz(jnp.sum((ys_ret - ys_lin)**2, axis=0), xs[0]))
 
             # === Estimate the curvature ===
-            # ud_vec = jnp.concatenate([p.ravel() for p in ud])
-            # ud_norm_squared = ud_vec.T @ gram @ ud_vec
-            # def Curv(s):
-            #     return 2 * retraction_error(s) / (ud_norm_squared * s**2)
+            ud_vec = jnp.concatenate([p.ravel() for p in ud])
+            ud_norm_squared = ud_vec.T @ gram @ ud_vec
+            def Curv(s):
+                return 2 * retraction_error(s) / (ud_norm_squared * s**2)
 
-            def descent(s, C=0):
-                return s - s**2 * (L + C) / 2 * var_1
+            def objective(s):
+                C = Lip(s) * Curv(s)
+                sigma = descent(s, C)
+                return -sigma
+            res = osp.optimize.minimize_scalar(objective, bounds=(smin, smax), method="bounded")
+            step_size = res.x
 
-            # def objective(s):
-            #     Lip = jnp.sqrt(2 * Lip_0) + L * s
-            #     C = Lip * Curv(s)
-            #     sigma = descent(s, C)
-            #     return -sigma
-            # res = osp.optimize.minimize_scalar(objective, bounds=(smin, smax), method="bounded")
-            # step_size = res.x
-
+        elif step_size_rule.startswith("adaptive_threshold"):
             # This approach works, but it has two drawbacks.
             # 1. Let U(·) denote the parameter to function map,
             #    θ the current parameter vector and d the parameters of the update direction.
@@ -993,8 +908,8 @@ for epoch in range(num_epochs):
             #        b = descent(s, C) * norm(expectation(d))**2
             #    is a lower bound for the descent of the algorithm in a step in direction d with step size s.
             #    However,
-            #    - If Lip_0 is underestimated, then b is not a valid lower bound for the descent.
-            #    - If Lip_0 is overestimated, then b is a lower bound for the descent,
+            #    - If Lip(0) is underestimated, then b is not a valid lower bound for the descent.
+            #    - If Lip(0) is overestimated, then b is a lower bound for the descent,
             #      but in many cases this bound is trivial (i.e. negative).
             #
             # To sidestep this issue, note that maximising
@@ -1026,18 +941,27 @@ for epoch in range(num_epochs):
             # Hence we retain the Robbins--Monro property that s is not in l1.
 
             total_step = epoch * epoch_length + step
-            retraction_threshold = min(Lip_0, 1 / (total_step + 1))
-            # retraction_threshold = min(Lip_0, 1 / (total_step + 1)**2)
-            # retraction_threshold = min(Lip_0, 1 / (total_step + 1)**1.5)
-            # TODO: Both do not work! --- Maybe the curvature is extremely large. Then we need a tiny step size.
-            #       Or it does not hold. In both cases, it seems a good idea to choose a threshold that does not
-            #       require the bounded curvature property!
-            # TODO: instead of heavy rejection based sampling, we could try 54 steps of an SGD with optimal step size.
-            # (We do this to find ONE linear update. Then we perform a single retraction step.)
-            # Actually, thats basically a good idea and maybe the reason why the algorithm currently does not work so well for quasi-projection.
-            # A single quasi-projection step does not provide much of a reduction.
-            # So if the retraction error is too large, we may not get convergence.
-            # Moreover, the algorithm seems to be very sensitive to the choice of the retraction threshold...
+            if step_size_rule == "adaptive_threshold_naive":
+                retraction_threshold = loss_estimate
+            else:
+                # retraction_threshold = 1 / jnp.sqrt(total_step + 1)
+                # retraction_threshold = 1 / (total_step + 1)
+                retraction_threshold = min(loss_estimate, smax / jnp.sqrt(total_step + 1))
+                # retraction_threshold = min(loss_estimate, 1 / jnp.sqrt(total_step + 1))
+                # retraction_threshold = min(loss_estimate, 1 / (total_step + 1))
+                # TODO: All these four work.
+                #       But those that prohibit the retraction from destroying the current loss work better.
+                # retraction_threshold = min(loss_estimate, 1 / (total_step + 1)**2)
+                # retraction_threshold = min(loss_estimate, 1 / (total_step + 1)**1.5)
+                # TODO: The last two do not work! --- Maybe the curvature is extremely large. Then we need a tiny step size.
+                #       Or it does not hold. In both cases, it seems a good idea to choose a threshold that does not
+                #       require the bounded curvature property!
+                # TODO: instead of heavy rejection based sampling, we could try 54 steps of an SGD with optimal step size.
+                # (We do this to find ONE linear update. Then we perform a single retraction step.)
+                # Actually, thats basically a good idea and maybe the reason why the algorithm currently does not work so well for quasi-projection.
+                # A single quasi-projection step does not provide much of a reduction.
+                # So if the retraction error is too large, we may not get convergence.
+                # Moreover, the algorithm seems to be very sensitive to the choice of the retraction threshold...
 
             # We want to find a point where
             #     Lip(s) * retraction_error(s) * var_1 <= retraction_threshold .
@@ -1047,8 +971,7 @@ for epoch in range(num_epochs):
             # But we also would like to ensure that the retraction error is larger than the current loss estimate
             # (intuitively, to ensure that a step can not have too large of an impact).
             def root_objective(s, rtol):
-                Lip = jnp.sqrt(2 * Lip_0) + L * s
-                return Lip * retraction_error(s) * var_1 - retraction_threshold / (1 + rtol)
+                return Lip(s) * retraction_error(s) * var_1 - retraction_threshold / (1 + rtol)
 
             def bisect(a, b, rtol=0.5, error_b=None):
                 if error_b is None:
@@ -1078,21 +1001,19 @@ for epoch in range(num_epochs):
                 k += 1
                 step_size = jnp.minimum(step_size, smax / k)
 
-            loss_estimates.append(Lip_0)
-            retraction_errors.append(retraction_error(step_size))
-            print(f"    retraction error = {(jnp.sqrt(2 * Lip_0) + step_size) * retraction_errors[-1] * var_1:.2e} < {retraction_threshold:.2e}")
+        # elif step_size_rule == "mixed":
+        #     ...
 
         else:
             assert step_size_rule == "decreasing"
             total_step = epoch * epoch_length + step
-            limit_total_step = limit_epoch * epoch_length
-            relative_step = max(total_step - limit_total_step, 0)
-            step_size = init_step_size / jnp.sqrt(relative_step + 1)
+            step_size = smax / jnp.sqrt(total_step + 1)
 
         parameters = updated_parameters(parameters, ud, step_size)
 
         step_sizes.append(step_size)
-        if activation.__name__ == "ReLU":
+        retraction_errors.append(Lip(step_size) * retraction_error(step_size) * var_1)
+        if activation.__name__.startswith("relu"):
             knotx = -parameters[-1] / parameters[-2][:, 0]
             knoty = prediction(parameters, knotx[None])[0]
             for i in range(width):
@@ -1103,11 +1024,9 @@ for epoch in range(num_epochs):
         #       since it is the L2 norm of the estimated projected gradient.
         #       This estiamte may not be zero even though the true projected gradient is.
         #       But estimating the true projected gradient is not feasible.
-        print(f"[{epoch+1:0{len(str(num_epochs))}d} | {step+1:0{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}  |  Stability: {stability(xs_train, ws_train):.2f}")
-    if plot_intermediate is True:
+        print(f"[{epoch+1:0{len(str(num_epochs))}d} | {step+1:0{len(str(epoch_length))}d}] Loss: {losses[-1]:.2e}  |  Retraction error: {retraction_errors[-1]:.2e}  |  Step size: {step_size:.2e}  |  Basis dimension: {basis_dimension}  |  Stability: {stability(xs_train, ws_train):.2f}")
+    if plot_intermediate:
         plot_state(f"Epoch {epoch+1}")
+        save_state()
 plot_state("Terminal value")
-
-
-A1, b1, A0, b0 = parameters
-jnp.savez("shallow_parameters.npz", A1=A1, b1=b1, A0=A0, b0=b0)
+save_state()

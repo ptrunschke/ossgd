@@ -1,0 +1,39 @@
+# ====================
+# Experiment 3
+# ====================
+### In the preceding experiments, we have seen that the basis functions of the
+### tanh-activation look like polynomials of bounded degree. Consequently, the
+### optimal sampling density looks very similar to the Legendre case. But this
+### happens due to the random initialisation and only remains during the opti-
+### misation for the smooth sin target and when the approximation remains
+### smooth. For the step function target, the optimal density becomes more and
+### more peaky around the jump point.
+target = "step"
+input_dimension = 1
+width = 10
+output_dimension = 1
+activation = "tanh"
+finite_difference = 0
+method = "NGD_quasi_projection"
+sample_size = 10
+sampling = "uniform"
+num_epochs = 20
+step_size_rule = "decreasing"
+limit_epoch = 7
+init_step_size = 0.01
+### We can use a larger initial step size but reach another stationary point.
+### Uncomment the following lines to perform this experiment.
+# init_step_size = 1
+# epoch_length = 100
+### The L∞-norm of the inverse Christoffel function becomes extremely large (≈150).
+### In this situation optimal sampling reduces the variance and speeds up convergence.
+### Since convergence is faster, we can transition earlyer to an decreasing step size
+### and also need fever epochs.
+### Uncomment the following lines to perform this experiment.
+# sampling = "optimal"
+# num_epochs = 10
+# limit_epoch = 4
+### Finally, we show that standard SGD can not achieve these speeds, with or without optimal sampling.
+### Successively uncomment the following two lines to perform these two experiments.
+# method = "SGD"
+# sampling = "uniform"

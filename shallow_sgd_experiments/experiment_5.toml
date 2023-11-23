@@ -1,0 +1,18 @@
+# ====================
+# Experiment 5
+# ====================
+### Here we use a sample size of 1 and decrease the step size from the start.
+target = "step"
+input_dimension = 1
+width = 10
+output_dimension = 1
+activation = "tanh"
+finite_difference = 0
+method = "NGD_quasi_projection"
+sample_size = 1
+sampling = "optimal"
+num_epochs = 15
+step_size_rule = "decreasing"
+limit_epoch = 0
+init_step_size = 1
+epoch_length = 100

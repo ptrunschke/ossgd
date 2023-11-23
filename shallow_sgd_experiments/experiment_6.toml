@@ -1,0 +1,23 @@
+# ====================
+# Experiment 6
+# ====================
+### Here we try a ReLU activation.
+# target = "step"
+# target = "exp"  # Reaches an error of 4e-6
+# num_epochs = 30
+target = "sin"  # Reaches an error of 2e-4
+num_epochs = 15
+activation = "relu_1"
+input_dimension = 1
+width = 20
+output_dimension = 1
+finite_difference = 0
+method = "NGD_quasi_projection"
+# method = "SGD"
+sample_size = 1
+sampling = "optimal"
+# step_size_rule = "decreasing"
+step_size_rule = "constant"
+limit_epoch = 0
+init_step_size = 0.001
+epoch_length = 500

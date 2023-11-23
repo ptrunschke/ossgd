@@ -1,0 +1,125 @@
+# ====================
+# Experiment 7
+# ====================
+### Here we try to select the step size adaptively.
+target = "sin"
+activation = "relu_2"
+input_dimension = 1
+width = 20
+# width = 50
+# width = 100
+output_dimension = 1
+finite_difference = 0
+epoch_length = 100
+loss_estimate_sample_size_init = 10
+
+### Uncomment one of the following blocks.
+
+### This is actually just a sanity check.
+# method = "NGD_projection"
+# sampling = "optimal"
+# step_size_rule = "adaptive_optimal"
+# sample_size = 200  # == 10 * width
+# # sample_size = 500  # == 10 * width
+# # sample_size = 1000  # == 10 * width
+# stability_bound = 0.5
+# num_epochs = 1
+
+# method = "NGD_projection"
+# sampling = "optimal"
+# step_size_rule = "adaptive_curvature"
+# sample_size = 200  # == 10 * width
+# # sample_size = 500  # == 10 * width
+# # sample_size = 1000  # == 10 * width
+# stability_bound = 0.5
+# num_epochs = 1
+
+# method = "NGD_projection"
+# sampling = "optimal"
+# step_size_rule = "adaptive_threshold"
+# sample_size = 200  # == 10 * width
+# # sample_size = 500  # == 10 * width
+# # sample_size = 1000  # == 10 * width
+# stability_bound = 0.5
+# num_epochs = 5
+
+# method = "NGD_projection"
+# sampling = "optimal"
+# step_size_rule = "adaptive_threshold_naive"
+# sample_size = 200  # == 10 * width
+# # sample_size = 500  # == 10 * width
+# # sample_size = 1000  # == 10 * width
+# stability_bound = 0.5
+# num_epochs = 5
+
+# method = "NGD_projection"
+# sampling = "optimal"
+# step_size_rule = "decreasing"
+# sample_size = 200  # == 10 * width
+# # sample_size = 500  # == 10 * width
+# # sample_size = 1000  # == 10 * width
+# stability_bound = 0.5
+# num_epochs = 10
+
+# method = "SGD"
+# sampling = "uniform"
+# step_size_rule = "decreasing"
+# sample_size = 200  # == 10 * width
+# # sample_size = 500  # == 10 * width
+# # sample_size = 1000  # == 10 * width
+# num_epochs = 10
+
+method = "NGD_quasi_projection"
+sampling = "optimal"
+step_size_rule = "adaptive_threshold"
+sample_size = 200  # == 10 * width
+# sample_size = 500  # == 10 * width
+# sample_size = 1000  # == 10 * width
+num_epochs = 2
+
+
+
+label = "{method}_samples-{sampling}_steps-{step_size_rule}_width-{width}"
+
+
+
+
+
+
+# label = "NGD_optimal-samples_adaptive-steps_width-{width}"
+# method = "NGD_quasi_projection"
+# sampling = "optimal"
+# step_size_rule = "adaptive"
+# sample_size = 1
+# stability_bound = None
+# num_epochs = 5
+
+# label = "NGD_optimal-samples_1e-3-steps_width-{width}"
+# method = "NGD_quasi_projection"
+# sampling = "optimal"
+# step_size_rule = "constant"
+# init_step_size = 1e-3
+# num_epochs = 5
+
+# label = "NGD_uniform-samples_adaptive-steps_width-{width}"
+# method = "NGD_quasi_projection"
+# sampling = "uniform"
+# step_size_rule = "adaptive"
+# num_epochs = 50
+# num_epochs = 5
+
+# label = "NGD_uniform-samples_1e-3-steps_width-{width}"
+# method = "NGD_quasi_projection"
+# sampling = "uniform"
+# step_size_rule = "constant"
+# init_step_size = 1e-3
+# num_epochs = 50
+# num_epochs = 5
+
+# label = "SGD_uniform-samples_1e-3-steps_width-{width}"
+# method = "SGD"
+# sampling = "uniform"
+# step_size_rule = "constant"
+# init_step_size = 1e-3
+# num_epochs = 50
+# num_epochs = 5
