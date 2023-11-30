@@ -1,0 +1,57 @@
+["*"]
+teaser = false
+style = "bimos"
+# style = "keynote"
+
+[optimal]
+data_path = "data/unbounded_domain/hermite7_t10_optimal7_Sinf_quasi_10000xdeterministic_unbounded.npz"
+trendline = true
+relative = true
+
+[naive]
+data_path = "data/unbounded_domain/hermite7_t10_gaussian70_Sinf_quasi_10000xdeterministic_unbounded.npz"
+trendline = true
+relative = true
+
+[nn_naive]
+# data_path = "shallow_sgd_experiments/data/experiment_7_SGD_samples-uniform_steps-decreasing_width-20.npz"
+data_path = "shallow_sgd_experiments/data/experiment_7_SGD_samples-uniform_steps-adaptive_threshold_width-20.npz"
+trendline = true
+relative = false
+
+[nn_naive_decreasing]
+data_path = "shallow_sgd_experiments/data/experiment_7_SGD_samples-uniform_steps-decreasing_width-20.npz"
+trendline = true
+relative = false
+
+[nn_optimal]
+# data_path = "shallow_sgd_experiments/data/experiment_7_NGD_quasi_projection_samples-optimal_steps-decreasing_width-20.npz"
+data_path = "shallow_sgd_experiments/data/experiment_7_NGD_projection_samples-optimal_steps-adaptive_threshold_width-20.npz"
+trendline = true
+relative = false
+
+# [optimal_recovery]
+# data_path = "data/compact_domain/legendre10_random10_optimal1_Sinf_quasi_10000xconstant.npz"
+# trendline = false
+
+# [uniform_recovery]
+# data_path = "data/compact_domain/legendre10_random10_uniform1_Sinf_quasi_10000xconstant.npz"
+# trendline = false
+
+# [optimal_nonrecovery]
+# data_path = "data/compact_domain/legendre10_random15_optimal1_Sinf_quasi_10000xdeterministic_unbounded.npz"
+# trendline = true
+
+# [uniform_nonrecovery]
+# data_path = "data/compact_domain/legendre10_random15_uniform1_Sinf_quasi_10000xdeterministic_unbounded.npz"
+# trendline = true
+
+# [optimal_nonrecovery_mixed]
+# data_path = "data/sgd_legendre10_t15_optimal50_Sinf_sadaptive_i10000_quasi.npz"
+# trendline = true
+# teaser = false
+
+# [optimal_nonrecovery_mixed_teaser]
+# data_path = "data/sgd_legendre10_t15_optimal50_Sinf_sadaptive_i10000_quasi.npz"
+# trendline = true
+# teaser = true
