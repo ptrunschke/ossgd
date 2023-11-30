@@ -72,10 +72,13 @@ assert isinstance(num_epochs, int) and num_epochs > 0
 epoch_length = parameters.pop("epoch_length")
 assert isinstance(epoch_length, int) and epoch_length > 0
 
+init = parameters.pop("initialisation", "random")
+# init = "last_run"
+
 sampling = parameters.pop("sampling")
 assert isinstance(sampling, str)
 sample_size = parameters.pop("sample_size")
-assert isinstance(sample_size, int) and sample_size > 0
+assert sample_size == "adaptive" or (isinstance(sample_size, int) and sample_size > 0)
 loss_estimate_sample_size_init = parameters.pop("loss_estimate_sample_size_init")
 assert isinstance(loss_estimate_sample_size_init, int) and loss_estimate_sample_size_init > 0
 
@@ -83,6 +86,8 @@ method = parameters.pop("method")
 assert isinstance(method, str)
 step_size_rule = parameters.pop("step_size_rule")
 assert isinstance(step_size_rule, str)
+if step_size_rule == "constant":
+    init_step_size = parameters.pop("init_step_size")
 stability_bound = parameters.pop("stability_bound", float("inf"))
 assert isinstance(stability_bound, (int, float)) and stability_bound > 0
 
@@ -91,7 +96,7 @@ assert isinstance(label, str)
 label = label.format(**globals())
 print(f"Label: {label}")
 
-assert len(parameters) == 0
+assert len(parameters) == 0, parameters
 del args, parameters
 
 base_path = config_file.parent
@@ -137,10 +142,9 @@ L = 1   # Lipschitz smoothness constant for the least squares loss
 mu = 1  # convexity constant for the least squares loss
 plot_intermediate = True
 gramian_quadrature_points = 1_000
-init = "random"
-# init = "last_run"
 # width += 20  # Increase the width by 20.
-loss_estimate_sample_size_init = max(loss_estimate_sample_size_init, sample_size)
+if isinstance(sample_size, int):
+    loss_estimate_sample_size_init = max(loss_estimate_sample_size_init, sample_size)
 
 
 # TODO: Try alternating optimisation?
@@ -184,7 +188,7 @@ def random_parameters(key, width=width):
     ]
 
 
-if init == "random":
+if init in ["random", "projection"]:
     key = jax.random.PRNGKey(0)
     parameters_key, key = jax.random.split(key, 2)
     parameters = random_parameters(parameters_key)
@@ -404,6 +408,7 @@ xs = jnp.linspace(0, 1, 1000).reshape(1, 1000)
 ws = jnp.ones((1000,))
 ys = target(xs)
 losses = []
+sample_sizes = []
 variation_constants = []
 if activation.__name__.startswith("relu"):
     knotxs = [[] for _ in range(width)]
@@ -443,14 +448,20 @@ def plot_state(label):
     ax[1].legend(loc="upper right")
     ax[1].set_title("Current basis")
 
-    steps = onp.arange(1, len(losses) + 1)
-    samples = loss_estimate_sample_size_init + steps * sample_size
+    # steps = onp.arange(1, len(losses) + 1)
+    # samples = loss_estimate_sample_size_init + steps * sample_size
+    samples = onp.cumsum(sample_sizes)[1:]
     ax[2].plot(samples, variation_constants, color="tab:red", label=r"$\|\mathfrak{K}\|_{L^\infty}$")
     ax[2].plot(samples, retraction_errors, color="tab:orange", label="retraction error")
     ax[2].plot(samples, step_sizes, color="tab:purple", label="step size")
     ax[2].plot(samples, loss_estimates, "--", color="tab:blue", label="loss estimate")
     ax[2].plot(samples, losses, color="tab:blue", label="loss")
-    xlim = loss_estimate_sample_size_init + sample_size, loss_estimate_sample_size_init + sample_size * num_epochs * epoch_length
+    if isinstance(sample_size, int):
+        xlim = loss_estimate_sample_size_init + sample_size, loss_estimate_sample_size_init + sample_size * num_epochs * epoch_length
+    elif len(samples) > 0:
+        xlim = samples[0], samples[-1]
+    else:
+        xlim = sample_sizes[0], 2 * sample_sizes[0]
     ax[2].set_xlim(*xlim)
     ax[2].set_xscale("log")
     xticks = set(xlim)
@@ -762,6 +773,57 @@ if init == "last_run":
 #       Then, whenever we stagnate we can adapt the model class by increasing the width with a random kick.
 
 
+sample_sizes.append(0)
+if init == "projection":
+    system, transform, basis_dimension = basis(parameters)
+    gram = gramian(system)
+
+    assert input_dimension == 1
+    osd = optimal_sampling_density(parameters)
+    ps = osd(xs)
+
+    I = jnp.eye(basis_dimension)
+    def stability(xs, ws):
+        onb_measures = transform @ system(xs)
+        G = onb_measures * ws @ onb_measures.T / len(ws)
+        return jnp.linalg.norm(G - I, ord=2)
+
+    if sample_size == "adaptive":
+        local_sample_size = int(jnp.ceil(10 * basis_dimension * (jnp.log2(basis_dimension) + 1)))
+    else:
+        local_sample_size = sample_size
+    sample_sizes[0] += local_sample_size
+
+    if sampling == "uniform":
+        training_key, key = jax.random.split(key, 2)
+        xs_train = jax.random.uniform(training_key, (input_dimension, local_sample_size), minval=0, maxval=1)
+        ws_train = jnp.ones((local_sample_size,))
+    else:
+        assert sampling == "optimal"
+        while True:
+            training_key, key = jax.random.split(key, 2)
+            xs_train = jax.random.choice(training_key, xs[0], (local_sample_size,), replace=True, p=ps)[None]
+            ws_train = 1 / osd(xs_train)
+            if stability_bound == jnp.inf:
+                break
+            assert 0 < stability_bound < 1
+            if stability(xs_train, ws_train) < stability_bound:
+                break
+    ys_train = target(xs_train)
+
+    A1, b1 = parameters[:2]
+    init_size = A1.size + b1.size
+    measures = system(xs_train)
+    assert measures.shape == (num_parameters, local_sample_size)
+    measures = (measures[:init_size] * jnp.sqrt(ws_train)).T
+    assert ys_train.shape == (1, local_sample_size)
+    values = jnp.sqrt(ws_train) * ys_train[0]
+    assert values.shape == (local_sample_size,)
+    init_value = jnp.linalg.lstsq(measures, values)[0]
+    A1 = init_value[:A1.size].reshape(A1.shape)
+    b1 = init_value[A1.size:].reshape(b1.shape)
+    parameters[:2] = A1, b1
+
 *_, basis_dimension = basis(parameters)
 if activation.__name__.startswith("relu"):
     # A1 x + b1 == 0  <-->  x == -b1 / A1
@@ -776,6 +838,7 @@ loss_estimate_key, key = jax.random.split(key, 2)
 loss_estimate_sample_size = loss_estimate_sample_size_init
 xs_le0 = jax.random.uniform(loss_estimate_key, (input_dimension, loss_estimate_sample_size), minval=0, maxval=1)
 loss_estimate = loss(parameters, xs_le0, target(xs_le0), 1)
+sample_sizes[0] += loss_estimate_sample_size
 
 plot_state(f"Initial value")
 save_state()
@@ -796,15 +859,21 @@ for epoch in range(num_epochs):
             G = onb_measures * ws @ onb_measures.T / len(ws)
             return jnp.linalg.norm(G - I, ord=2)
 
+        if sample_size == "adaptive":
+            local_sample_size = int(jnp.ceil(10 * basis_dimension * (jnp.log2(basis_dimension) + 1)))
+        else:
+            local_sample_size = sample_size
+        sample_sizes.append(local_sample_size)
+
         if sampling == "uniform":
             training_key, key = jax.random.split(key, 2)
-            xs_train = jax.random.uniform(training_key, (input_dimension, sample_size), minval=0, maxval=1)
-            ws_train = jnp.ones((sample_size,))
+            xs_train = jax.random.uniform(training_key, (input_dimension, local_sample_size), minval=0, maxval=1)
+            ws_train = jnp.ones((local_sample_size,))
         else:
             assert sampling == "optimal"
             while True:
                 training_key, key = jax.random.split(key, 2)
-                xs_train = jax.random.choice(training_key, xs[0], (sample_size,), replace=True, p=ps)[None]
+                xs_train = jax.random.choice(training_key, xs[0], (local_sample_size,), replace=True, p=ps)[None]
                 ws_train = 1 / osd(xs_train)
                 if stability_bound == jnp.inf:
                     break
@@ -814,8 +883,8 @@ for epoch in range(num_epochs):
         ys_train = target(xs_train)
 
         # === Option 1: Cumulative mean ===
-        # loss_estimate_sample_size += sample_size
-        # relaxation = sample_size / loss_estimate_sample_size
+        # loss_estimate_sample_size += local_sample_size
+        # relaxation = local_sample_size / loss_estimate_sample_size
         # loss_estimate = (1 - relaxation) * loss_estimate + relaxation * loss(parameters, xs_train, ys_train, ws_train)
         # === Option 2: Exponentially weighted moving average ===
         loss_estimate = 0.5 * loss_estimate + 0.5 * loss(parameters, xs_train, ys_train, ws_train)
@@ -849,12 +918,12 @@ for epoch in range(num_epochs):
         if method == "SGD":
             es = jnp.linalg.svd(gram)[1]
             lmin, lmax = es.min(), es.max()
-            var_1 = (lmax**2 * (sample_size - 1) + lmax * V) / sample_size
+            var_1 = (lmax**2 * (local_sample_size - 1) + lmax * V) / local_sample_size
         elif method == "NGD_quasi_projection":
-            var_1 = (sample_size + V - 1) / sample_size
+            var_1 = (local_sample_size + V - 1) / local_sample_size
         elif method == "NGD_projection":
             assert stability_bound < 1
-            var_1 = (sample_size + V - 1) / sample_size / (1 - stability_bound)**2
+            var_1 = (local_sample_size + V - 1) / local_sample_size / (1 - stability_bound)**2
         else:
             raise NotImplementedError
         smin = 0

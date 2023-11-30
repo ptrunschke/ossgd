@@ -77,18 +77,27 @@ loss_estimate_sample_size_init = 10
 # # sample_size = 1000  # == 10 * width
 # num_epochs = 2
 
-method = "SGD"
-sampling = "uniform"
-step_size_rule = "adaptive_threshold"
-sample_size = 200  # == 10 * width
-# sample_size = 500  # == 10 * width
-# sample_size = 1000  # == 10 * width
-num_epochs = 10
+# method = "SGD"
+# sampling = "uniform"
+# step_size_rule = "adaptive_threshold"
+# sample_size = 200  # == 10 * width
+# # sample_size = 500  # == 10 * width
+# # sample_size = 1000  # == 10 * width
+# num_epochs = 10
+
+method = "NGD_projection"
+sampling = "optimal"
+step_size_rule = "constant"
+init_step_size = 5e-2
+sample_size = "adaptive"
+stability_bound = 0.5
+num_epochs = 5
 
 
 
 
-label = "{method}_samples-{sampling}_steps-{step_size_rule}_width-{width}"
+
+label = "{method}_samples-{sampling}_steps-{step_size_rule}_width-{width}-{activation.__name__}"
 
 
 
