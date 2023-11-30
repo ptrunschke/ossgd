@@ -69,13 +69,22 @@ loss_estimate_sample_size_init = 10
 # # sample_size = 1000  # == 10 * width
 # num_epochs = 10
 
-method = "NGD_quasi_projection"
-sampling = "optimal"
+# method = "NGD_quasi_projection"
+# sampling = "optimal"
+# step_size_rule = "adaptive_threshold"
+# sample_size = 200  # == 10 * width
+# # sample_size = 500  # == 10 * width
+# # sample_size = 1000  # == 10 * width
+# num_epochs = 2
+
+method = "SGD"
+sampling = "uniform"
 step_size_rule = "adaptive_threshold"
 sample_size = 200  # == 10 * width
 # sample_size = 500  # == 10 * width
 # sample_size = 1000  # == 10 * width
-num_epochs = 2
+num_epochs = 10
+
 
 
 

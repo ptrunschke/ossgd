@@ -63,7 +63,7 @@ if args.stability == jnp.inf:
 else:
     stability_str = f"{args.stability:.2f}".replace(".", "-")
 
-file_base = Path(f"{args.basis}{args.space_dimension}_t{args.target_dimension}_{args.sampling_strategy}{args.sample_size}_S{stability_str}_{args.projection}_{args.iterations}x{step_size_str}")
+file_base = Path(f"{args.basis}{args.space_dimension}_{args.target}{args.target_dimension}_{args.sampling_strategy}{args.sample_size}_S{stability_str}_{args.projection}_{args.iterations}x{step_size_str}")
 data_path = Path("data") / "compact_domain"
 data_path.mkdir(exist_ok=True)
 data_path /= file_base.with_suffix(".npz")

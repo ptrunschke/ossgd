@@ -37,7 +37,7 @@ alerted_text_fg = mix(bimosred, 80, bimosyellow)
 example_text_fg = mix(bimosred, 50, bimosyellow, 80)
 # \setbeamercolor{block title}{fg=normal text.fg, bg=normal text.bg!80!fg}
 # \setbeamercolor{block body}{bg=block title.bg!50!normal text.bg}
-block_title_bg = mix(normal_text_bg, 80, bimosblack)
+block_title_bg = mix(normal_text_bg, 80, normal_text_fg)
 block_body_bg = mix(block_title_bg, 50, normal_text_bg)
 # \setbeamercolor{frametitle}{fg=bimosred!75!normal text.fg, bg=normal text.bg}
 frametitle_fg = mix(bimosred, 75, normal_text_fg)
