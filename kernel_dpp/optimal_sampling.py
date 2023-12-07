@@ -27,7 +27,8 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     dimension = 10
-    R = 3 * dimension
+    # NOTE: The quality of the samples is not very good for small R.
+    R = 10 * dimension
 
     xs = np.linspace(-1, 1, 1000)
     fs = mercer_decomposition(xs, R)
@@ -82,7 +83,7 @@ def matrix_pos(matrix):
     return vs * es @ vs.T
 
 
-def sample(rng, bs, fs, plot=False, sample_indices=None):
+def draw_sample(rng, bs, fs, plot=False, sample_indices=None):
     dimension, num_nodes = bs.shape
     rank = fs.shape[0]
     assert fs.shape == (rank, num_nodes)
@@ -109,18 +110,21 @@ def sample(rng, bs, fs, plot=False, sample_indices=None):
     f_ch = np.maximum(f_ch, alpha / num_nodes)
     pdf = b_ch / f_ch
     if plot:
-        plt.plot(b_ch / np.sum(b_ch))
-        plt.plot(f_ch / np.sum(f_ch))
+        # plt.plot(b_ch / np.sum(b_ch))
+        # plt.plot(f_ch / np.sum(f_ch))
         plt.plot(pdf / np.sum(pdf))
         for idx in sample_indices:
             plt.axvline(idx, color="tab:red")
-        plt.title(f"Optimal sampling distribution (step {len(sample_indices)+1})")
+        if len(sample_indices) == dimension:
+            plt.title(f"Optimal sampling distribution")
+        else:
+            plt.title(f"Optimal sampling distribution (step {len(sample_indices)+1})")
         plt.show()
     if len(sample_indices) == dimension:
         return sample_indices
     pdf /= np.sum(pdf)
     sample_indices.append(rng.choice(num_nodes, p=pdf))
-    return sample(rng, bs, fs, plot, sample_indices)
+    return draw_sample(rng, bs, fs, plot, sample_indices)
 
 
 if __name__ == "__main__":
@@ -129,7 +133,7 @@ if __name__ == "__main__":
     target = lambda x: np.sin(2 * np.pi * x) + np.cos(2 * dimension * np.pi * x)
 
     rng = np.random.default_rng(0)
-    idcs = sample(rng, bs, fs, plot=True)
+    idcs = draw_sample(rng, bs, fs, plot=True)
     points = xs[idcs]
 
     c1 = quasi_optimality_constant(points, dimension)
@@ -157,7 +161,19 @@ if __name__ == "__main__":
     trials = 1_000
     samples = []
     for trial in trange(trials):
-        samples.append(sample(rng, bs, fs))
+        samples.append(draw_sample(rng, bs, fs))
+
+    fig, ax = plt.subplots(1, 3)
+    c1s = []
+    c2s = []
+    for e, sample in enumerate(samples, start=1):
+        c1s.append(quasi_optimality_constant(xs[sample], dimension, h1_legendre))
+        c2s.append(bias_constant(xs[sample], dimension, h1_legendre))
+    ax[1].hist(c1s, bins=25)
+    ax[1].set_title("Quasi-optimality factor")
+    ax[2].hist(c2s, bins=25)
+    ax[2].set_title("Noise amplification factor")
     samples = np.concatenate(samples)
-    plt.hist(xs[samples], density=True, bins=100)
+    ax[0].hist(xs[samples], density=True, bins=80)
+    ax[0].set_title("Sample distribution")
     plt.show()
