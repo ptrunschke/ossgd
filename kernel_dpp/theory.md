@@ -72,3 +72,27 @@ Since $\tilde{B}_i$ and $\tilde\Psi_i$ only depend on the points $x_{j}$ for $j>
 $$
     \frac{\boldsymbol{b}_i^\intercal(I - \tilde{B}_i\tilde{B}_i^+) \boldsymbol{b}_i}{\boldsymbol{\psi}_i^\intercal (I - \tilde{\Psi}_i\tilde{\Psi}_i^+) \boldsymbol{\psi}_i} .
 $$
+
+## Example
+
+Consider the Hilbert space $\mathcal{V} = H^1([-1, 1])$ with reproducing kernel
+$$
+    k(x, y) \propto \cosh(1 - \max\{x, y\}) \cosh(1 + \min\{x, y\})
+$$
+and the $d$-dimensional polynomial subspace $\mathcal{V}_d = \operatorname{span}\{1, x, \ldots, x^{d-1}\}$.
+Performing the sequential sampling procedure described above, we can see that the repulsive properties of the projection DPP $\det(B^\intercal B)$ being preserved in the ratio $\frac{\det(B^\intercal B)}{\det(\Psi^\intercal \Psi)}$.
+![](plot/R-1000/sampling_density_step-1.png)
+![](plot/R-1000/sampling_density_step-3.png)
+![](plot/R-1000/sampling_density_step-7.png)
+![](plot/R-1000/sampling_density_step-10.png)
+
+However, the sampling becomes numerically unstable, due to the divsion by a function with zeros.
+We therefore have to draw samples from a regularised density.
+In particular, we also observe that the quality of the Mercer approximation $K \approx \Psi^\intercal \Psi$ influences the the quality of the resulting samples.
+This is illstrated in the following three plots.
+All experiments start the sampling with the same random seed and differ only in the rank ($R \in \{10, 100, 1000\}$).
+
+
+![](plot/R-10/sample_statistics.png)
+![](plot/R-100/sample_statistics.png)
+![](plot/R-1000/sample_statistics.png)
