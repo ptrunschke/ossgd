@@ -1,3 +1,4 @@
+from pathlib import Path
 import pytest
 import numpy as np
 from rkhs import rkhs_kernel_matrix
@@ -26,39 +27,77 @@ def test_mercer_decomposition():
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
+    textcolor = "#D4D6C0"
+    legendcolor = "#3B3B3B"
+    plt.rcParams.update({
+        "lines.color": textcolor,
+        "patch.edgecolor": textcolor,
+        "axes.edgecolor": textcolor,
+        "axes.labelcolor": textcolor,
+        "axes.titlecolor": textcolor,
+        "xtick.color": textcolor,
+        "ytick.color": textcolor,
+        "text.usetex": True,
+        "text.latex.preamble": r"""
+        \usepackage{amssymb}
+        \usepackage{amsmath}
+        \usepackage{bbm}
+    """,
+        "legend.facecolor": legendcolor,
+        "legend.edgecolor": textcolor,
+        "legend.labelcolor": textcolor,
+    })
+
     dimension = 10
     # NOTE: The quality of the samples is not very good for small R.
-    R = 10 * dimension
+    # R = 1 * dimension
+    # R = 10 * dimension
+    R = 100 * dimension
+
+    plot_directory = Path(__file__).parent / "plot" / f"R-{R}"
+    plot_directory.mkdir(exist_ok=True)
 
     xs = np.linspace(-1, 1, 1000)
     fs = mercer_decomposition(xs, R)
 
-    fig, ax = plt.subplots(1, 2)
+    plot_path = plot_directory / f"eigenvalues.png"
+    fig, ax = plt.subplots(1, 2, figsize=(8, 4), dpi=300)
     sigmas = np.trapz(fs**2, xs, axis=1) / 2
     ax[0].plot(sigmas)
     ax[0].set_yscale("log")
     ax[0].set_title("Eigenvalues of the kernel")
     for k in range(5):
-        ax[1].plot(xs, fs[k], label=f"f_{{{k}}}")
+        ax[1].plot(xs, fs[k], label=f"$f_{{{k}}}$")
     ax[1].legend()
     ax[1].set_title("Eigenfunctions of the kernel")
-    plt.show()
-
+    print("Saving eigenvalue plot to", plot_path)
+    plt.savefig(
+        plot_path, dpi=300, edgecolor="none", bbox_inches="tight", transparent=True
+    )
+    plt.close(fig)
 
     h1_legendre = orthonormal_basis(hk_gramian(dimension, 1))
     bs = h1_legendre(xs, np.eye(dimension))
     assert bs.shape == (dimension, len(xs))
 
+    plot_path = plot_directory / f"christoffel.png"
+    fig, ax = plt.subplots(1, 1, figsize=(8, 4), dpi=300)
     ch_b = np.sum(bs**2, axis=0)
     ch_b /= np.trapz(ch_b, xs)
     ch_f = np.sum(fs**2, axis=0)
     ch_f /= np.trapz(ch_f, xs)
     ch_bf = ch_b / ch_f
     ch_bf /= np.trapz(ch_bf, xs)
-    plt.plot(xs, ch_b)
-    plt.plot(xs, ch_f)
-    plt.plot(xs, ch_bf)
-    plt.show()
+    ax.plot(xs, ch_b, label=r"$\mathfrak{K}_{\mathcal{V}_d}$")
+    ax.plot(xs, ch_f, label=r"$\mathfrak{K}_{\mathcal{V}}$")
+    ax.plot(xs, ch_bf, label=r"$\frac{\mathfrak{K}_{\mathcal{V}_d}}{\mathfrak{K}_{\mathcal{V}}}$")
+    ax.legend()
+    ax.set_title("Christoffel densities")
+    print("Saving Christoffel plot to", plot_path)
+    plt.savefig(
+        plot_path, dpi=300, edgecolor="none", bbox_inches="tight", transparent=True
+    )
+    plt.close(fig)
 
 
 if __name__ == "__main__" and __debug__:
@@ -110,16 +149,20 @@ def draw_sample(rng, bs, fs, plot=False, sample_indices=None):
     f_ch = np.maximum(f_ch, alpha / num_nodes)
     pdf = b_ch / f_ch
     if plot:
-        # plt.plot(b_ch / np.sum(b_ch))
-        # plt.plot(f_ch / np.sum(f_ch))
-        plt.plot(pdf / np.sum(pdf))
+        plot_path = plot_directory / f"sampling_density_step-{len(sample_indices)+1}.png"
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4), dpi=300)
+        ax.plot(pdf / np.sum(pdf))
         for idx in sample_indices:
-            plt.axvline(idx, color="tab:red")
+            ax.axvline(idx, color="tab:red")
         if len(sample_indices) == dimension:
-            plt.title(f"Optimal sampling distribution")
+            ax.set_title(f"Optimal sampling distribution")
         else:
-            plt.title(f"Optimal sampling distribution (step {len(sample_indices)+1})")
-        plt.show()
+            ax.set_title(f"Optimal sampling distribution (step {len(sample_indices)+1})")
+        print("Saving optimal sampling plot to", plot_path)
+        plt.savefig(
+            plot_path, dpi=300, edgecolor="none", bbox_inches="tight", transparent=True
+        )
+        plt.close(fig)
     if len(sample_indices) == dimension:
         return sample_indices
     pdf /= np.sum(pdf)
@@ -141,21 +184,29 @@ if __name__ == "__main__":
     print(f"Quasi-optimality: {c1:.2f}")
     print(f"Bias: {c2:.2f}")
 
+    plot_path = plot_directory / f"error.png"
+    fig, ax = plt.subplots(1, 1, figsize=(8, 4), dpi=300)
     l2_legendre = orthonormal_basis(hk_gramian(dimension, 0))
     h1_legendre = orthonormal_basis(hk_gramian(dimension, 1))
     xs = np.linspace(-1, 1, 1000)
     c = optimal_least_squares(target, points, dimension, basis=h1_legendre)
     error = target(xs) - h1_legendre(xs, c)
     node_errors = target(points) - h1_legendre(points, c)
-    plt.plot(xs, error, "C0-")
-    plt.plot(points, node_errors, "C0o")
+    ax.plot(xs, error, "C0-", label="Optimal approximation")
+    ax.plot(points, node_errors, "C0o")
     c = np.linalg.lstsq(h1_legendre(points, np.eye(dimension)).T, target(points), rcond=None)[0]
     error = target(xs) - h1_legendre(xs, c)
-    plt.plot(xs, error, "C1--")
+    ax.plot(xs, error, "C1--", label="$H^1$ least squares")
     c = np.linalg.lstsq(l2_legendre(points, np.eye(dimension)).T, target(points), rcond=None)[0]
     error = target(xs) - l2_legendre(xs, c)
-    plt.plot(xs, error, "C2-.")
-    plt.show()
+    ax.plot(xs, error, "C2-.", label="$L^2$ least squares")
+    ax.legend()
+    ax.set_title("Pointwise error")
+    print("Saving error plot to", plot_path)
+    plt.savefig(
+        plot_path, dpi=300, edgecolor="none", bbox_inches="tight", transparent=True
+    )
+    plt.close(fig)
 
     from tqdm import trange
     trials = 1_000
@@ -163,7 +214,8 @@ if __name__ == "__main__":
     for trial in trange(trials):
         samples.append(draw_sample(rng, bs, fs))
 
-    fig, ax = plt.subplots(1, 3)
+    plot_path = plot_directory / f"sample_statistics.png"
+    fig, ax = plt.subplots(1, 3, figsize=(8, 4), dpi=300)
     c1s = []
     c2s = []
     for e, sample in enumerate(samples, start=1):
@@ -176,4 +228,8 @@ if __name__ == "__main__":
     samples = np.concatenate(samples)
     ax[0].hist(xs[samples], density=True, bins=80)
     ax[0].set_title("Sample distribution")
-    plt.show()
+    print("Saving sample statistics plot to", plot_path)
+    plt.savefig(
+        plot_path, dpi=300, edgecolor="none", bbox_inches="tight", transparent=True
+    )
+    plt.close(fig)
