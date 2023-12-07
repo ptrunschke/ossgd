@@ -26,6 +26,8 @@ $$
     \mu_\infty
     := \max_{v\in\mathcal{V}_d} \frac{\|v\|_{\mathcal{V}}}{\|\boldsymbol{v}\|_{\infty}} .
 $$
+
+## Sampling
 Assuming $\|u-u_\star\|_{L^\infty}$ to be negligible, we can optimise the points as to minimise the consant $\mu$.
 As a surrogate for the maximisation of the smallest eigenvalue we propose to maximise the determinant.
 Choosing $n=d$ sample points and conditioning on the event $\operatorname{ker}(K)=0$, we obtain
