@@ -60,7 +60,9 @@ def optimal_least_squares(function, points, dimension, basis=None):
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
+    from pathlib import Path
+    from tqdm import trange
+    from plotting import plt
     from matplotlib.colors import LogNorm
 
     dimension = 10
@@ -98,32 +100,6 @@ if __name__ == "__main__":
     error = target(xs) - l2_legendre(xs, c)
     plt.plot(xs, error, "C2-.")
     plt.show()
-
-    from pathlib import Path
-    from tqdm import trange
-    # from matplotlib.collections import LineCollection
-
-    textcolor = "#D4D6C0"
-    legendcolor = "#3B3B3B"
-    plt.rcParams.update({
-        "lines.color": textcolor,
-        "patch.edgecolor": textcolor,
-        "axes.edgecolor": textcolor,
-        "axes.labelcolor": textcolor,
-        "axes.titlecolor": textcolor,
-        "xtick.color": textcolor,
-        "ytick.color": textcolor,
-        "text.usetex": True,
-        "text.latex.preamble": r"""
-        \usepackage{amssymb}
-        \usepackage{amsmath}
-        \usepackage{bbm}
-    """,
-        "legend.facecolor": legendcolor,
-        "legend.edgecolor": textcolor,
-        "legend.labelcolor": textcolor,
-    })
-
 
     rng = np.random.default_rng(7)
     trials = 5
