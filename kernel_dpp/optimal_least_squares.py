@@ -98,3 +98,59 @@ if __name__ == "__main__":
     error = target(xs) - l2_legendre(xs, c)
     plt.plot(xs, error, "C2-.")
     plt.show()
+
+    from pathlib import Path
+    from tqdm import trange
+    # from matplotlib.collections import LineCollection
+
+    textcolor = "#D4D6C0"
+    legendcolor = "#3B3B3B"
+    plt.rcParams.update({
+        "lines.color": textcolor,
+        "patch.edgecolor": textcolor,
+        "axes.edgecolor": textcolor,
+        "axes.labelcolor": textcolor,
+        "axes.titlecolor": textcolor,
+        "xtick.color": textcolor,
+        "ytick.color": textcolor,
+        "text.usetex": True,
+        "text.latex.preamble": r"""
+        \usepackage{amssymb}
+        \usepackage{amsmath}
+        \usepackage{bbm}
+    """,
+        "legend.facecolor": legendcolor,
+        "legend.edgecolor": textcolor,
+        "legend.labelcolor": textcolor,
+    })
+
+
+    rng = np.random.default_rng(7)
+    trials = 5
+    sample_sizes = range(dimension, 10 * dimension)
+    lines = np.empty((trials, len(sample_sizes), 2))
+    lines[:, :, 0] = sample_sizes
+    mus = lines[:, :, 1]
+    for trial in trange(trials):
+        points = rng.uniform(-1, 1, sample_sizes[-1])
+        for step, sample_size in enumerate(sample_sizes):
+            mus[trial, step] = mu_W(points[:sample_size], dimension, basis=h1_legendre)
+
+    assert np.all(mus[:, :-1] >= mus[:, 1:] - 1e-12)
+
+    plot_directory = Path(__file__).parent / "plot"
+    plot_directory.mkdir(exist_ok=True)
+    plot_path = plot_directory / f"quasi-optimality_factor.png"
+    fig, ax = plt.subplots(1, 1, figsize=(8, 4), dpi=300)
+    for trial in range(trials):
+        ax.plot(sample_sizes, mus[trial], label=f"Trial {trial+1}")
+    ax.legend()
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("Sample size")
+    ax.set_title("Quasi-optimality factor")
+    print("Saving sample statistics plot to", plot_path)
+    plt.savefig(
+        plot_path, dpi=300, edgecolor="none", bbox_inches="tight", transparent=True
+    )
+    plt.close(fig)

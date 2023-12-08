@@ -17,6 +17,9 @@ $$
     \|u_\star - u_{d,n}\|_{\mathcal{V}}
     \le (1 + 2\mu) \|u_\star - u_d\|_{\mathcal{V}_d}  + (1 + 2\mu_\infty) \|u - u_\star\|_{L^\infty} .
 $$
+
+> **Note:** You can probably not optimise $\mu$ and $\mu_\infty$ simultaneously!
+
 Defining $B_{li} := b_l(x_i)$, the constants $\mu$ and $\mu_\infty$ are given by
 $$
     \mu
@@ -72,6 +75,20 @@ Since $\tilde{B}_i$ and $\tilde\Psi_i$ only depend on the points $x_{j}$ for $j>
 $$
     \frac{\boldsymbol{b}_i^\intercal(I - \tilde{B}_i\tilde{B}_i^+) \boldsymbol{b}_i}{\boldsymbol{\psi}_i^\intercal (I - \tilde{\Psi}_i\tilde{\Psi}_i^+) \boldsymbol{\psi}_i} .
 $$
+
+## Greedy update
+
+A greedy update of a given sample $x_1, \ldots, x_d$ could be done as follows
+
+0. Initialize the joint sample $\underline{x} := (x_1, \ldots, x_d)$.
+1. Draw a new sample $\tilde{x}_1, \ldots, \tilde{x}_d$.
+2. Update the joint sample $\underline{x} := (\underline{x}, \tilde{x}_i)$ such that $\mu(\underline{x})$ is minimised.
+3. If $\mu(\underline{x})$ is still too large, go to step 1.
+
+This procedure is possible because $\mu(\underline{x})$ decreases monotonically with the sample size $n$.
+Numerical evidence for this is provided in the subsequent plot.
+
+![](plot/quasi-optimality_factor.png)
 
 ## Example
 
