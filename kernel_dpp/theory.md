@@ -170,14 +170,23 @@ $$
 
 ## Optimisation
 
-Note, that by the preceding argument we can devise an evolutionary optimisation algorithm for the generation of a sample satisfying $\mu\le\mu_0$.
+Note, that by the preceding argument we can devise an evolutionary optimisation algorithm for the generation of an optimal sample.
 
 0. Draw an initial sample $\underline{x}$ of size $M$.
-1. Draw a new independent sample $\tilde{\underline{x}}$ of minimal size $d$ and define $\bar{\underline{x}} := (\underline{x}, \tilde{\underline{x}})$.
-2. Greedily remove $d$ samples from $\bar{\underline{x}}$ and store the resulting sample in $\underline{x}$. (The resulting value of $\mu$ must be smaller by monotonicity — at least if we only replace a single sample point.)
-3. Go to 1. or terminate (e.g. after too many stagnations).
+1. Draw a new independent sample $\tilde{x}_1,\ldots,\tilde{x}_d$ of minimal size $d$.
+2. For every $j=1,\ldots,d$ define $\underline{x}^{+j} := (\underline{x}, \tilde{x}_j)$.
+3. Compute $j^\star = \argmin_{j=1,\ldots,d} \mu(\underline{x}^{+j})$ and redefine $\underline{x} := \underline{x}^{+j^\star}$.
+4. For every $j=1,\ldots,M+1$ define $\underline{x}^{-j}$ as $\underline{x}$ without the $j$-th point.
+5. Compute $j^\star = \argmin_{j=1,\ldots,d} \mu(\underline{x}^{-j})$ and redefine $\underline{x} := \underline{x}^{-j^\star}$.
+6. Go to 1. or terminate.
 
-> **Question:** What is the maximal value that we can achieve in this way?
+Note that, we only add or remove a single sample point, the monotonicity of $\mu$ guarantees that the value of $\mu$ decreases in every step of this procedure.
+However, the resulting sample remains random and may get stuck in a local minimum.
+This is illustrated in the subsequent plot.
+
+![](plot/optimisation_statistics.png)
+
+> **Question:** What is the optimal value that we can achieve in this way? Can we condition on $\mu\le\mu_0$ for some $\mu_0$?
 
 ## Example
 
