@@ -24,16 +24,69 @@ Defining $B_{li} := b_l(x_i)$, the constants $\mu$ and $\mu_\infty$ are given by
 $$
     \mu
     := \max_{v\in\mathcal{V}_d} \frac{\|v\|_{\mathcal{V}}}{\|v\|_{n}}
-    := \lambda_{\mathrm{min}}(BK^+B^\intercal)^{-1}
+    = \lambda_{\mathrm{min}}(BK^+B^\intercal)^{-1}
     \qquad\text{and}\qquad
     \mu_\infty
     := \max_{v\in\mathcal{V}_d} \frac{\|v\|_{\mathcal{V}}}{\|\boldsymbol{v}\|_{\infty}} .
 $$
+Assuming $\|u-u_\star\|_{L^\infty}$ to be negligible, we can optimise the points as to minimise the consant $\mu$.
+A common surrogate for the maximisation of the smallest eigenvalue is the determinant.
+And instead of maximising this function directly, we propose to draw samples from it and condition on the event $\mu \le \mu_0$.
+
+## Well-posedness
+For it to makes sense to draw a sample from the determinant
+$$
+    \det(BK^+ B^\intercal) ,
+$$
+we need to show that it is an (unnormalised) probability density function,
+i.e. that it is
+1. non-negative and
+2. integrable.
+
+To show non-negativity, recall that $K$ is a kernel matrix, and thus positive definite by definition.
+This implies that $K^+$ is positive definite and that for any $c\in\mathbb{R}^d$
+$$
+    c^\intercal B K^+ B^\intercal c
+    = (B^\intercal c)^\intercal K^+ (B^\intercal c)
+    \ge 0 .
+$$
+This proves, that $\det(BK^+ B^\intercal)$ must always be non-negative.
+To show integrability, observe that by non-negativity, the Leibniz formula and the triangle inequality
+$$
+\begin{aligned}
+    \det(BK^+B^\intercal)
+    &= |\det(BK^+B^\intercal)| \\
+    &= \left|\sum_{\sigma \in S_d} \operatorname{sgn}(\sigma) \prod_{l = 1}^d \boldsymbol{b}_l^\intercal K^+ \boldsymbol{b}_{\sigma(l)}\right| \\
+    &\le \sum_{\sigma \in S_d} \prod_{l = 1}^d |\boldsymbol{b}_l^\intercal K^+ \boldsymbol{b}_{\sigma(l)}| ,
+\end{aligned}
+$$
+where $\boldsymbol{b}_l := (b_l(x_1), \ldots, b_l(x_n))^\intercal$.
+Now let $W := \operatorname{span}\{k(x_1,\bullet), \ldots, k(x_n, \bullet)\}$ and observe that
+$$
+\begin{aligned}
+    |\boldsymbol{b}_l^\intercal K^+ \boldsymbol{b}_{m}|
+    &= |\boldsymbol{b}_l^\intercal K^+ K K^+ \boldsymbol{b}_{m}| \\
+    &= |(P_W b_l, P_W b_m)_{\mathcal{V}}| \\
+    &\le \|P_W b_l\|_{\mathcal{V}} \|P_W b_m\|_{\mathcal{V}} \\
+    &\le \|b_l\|_{\mathcal{V}} \|b_m\|_{\mathcal{V}} \\
+    &= 1 .
+\end{aligned}
+$$
+Combining both equations, we obtain
+$$
+    \det(BK^+B^\intercal)
+    \le \sum_{\sigma\in S_d} \prod_{l=1}^d 1
+    = d!
+$$
+and, consequently,
+$$
+    \int_{\mathcal{X}^n} \det(BK^+B^\intercal) \,\mathrm{d}\rho^{\otimes n} \le d! < \infty.
+$$
+
 
 ## Sampling
-Assuming $\|u-u_\star\|_{L^\infty}$ to be negligible, we can optimise the points as to minimise the consant $\mu$.
-As a surrogate for the maximisation of the smallest eigenvalue we propose to maximise the determinant.
-Choosing $n=d$ sample points and conditioning on the event $\operatorname{ker}(K)=0$, we obtain
+To draw a sample from the distribution described in the preceding section we let $n=d$ and conditioning on the event $\operatorname{ker}(K)=0$ (i.e. we assume that all sample points are distinct).
+Under these assumptions, we can rewrite the determinant as
 $$
     \det(BK^+ B^\intercal) = \frac{\det(B^\intercal B)}{\det(K)} .
 $$
