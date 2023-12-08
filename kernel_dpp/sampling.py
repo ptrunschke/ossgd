@@ -107,7 +107,7 @@ def draw_sample(rng, bs, fs, plot=False, sample_indices=None):
     assert fs.shape == (rank, num_nodes)
     if sample_indices is None:
         sample_indices = []
-    assert isinstance(sample_indices, list) and len(sample_indices) <= dimension <= R
+    assert isinstance(sample_indices, list) and len(sample_indices) <= dimension <= rank
     if len(sample_indices) == dimension and not plot:
         return sample_indices
     f_factor = fs[:, sample_indices]
@@ -147,6 +147,30 @@ def draw_sample(rng, bs, fs, plot=False, sample_indices=None):
     pdf /= np.sum(pdf)
     sample_indices.append(rng.choice(num_nodes, p=pdf))
     return draw_sample(rng, bs, fs, plot, sample_indices)
+
+
+class Sampler(object):
+    def __init__(self, dimension, rank, discretisation) -> None:
+        self.xs = np.linspace(-1, 1, discretisation)
+        self.fs = mercer_decomposition(self.xs, rank)
+        self.basis = orthonormal_basis(hk_gramian(dimension, 1))
+        self.bs = self.basis(self.xs, np.eye(dimension))
+
+    @property
+    def discretisation(self):
+        return len(self.xs)
+
+    @property
+    def rank(self):
+        return self.fs.shape[0]
+
+    @property
+    def dimension(self):
+        return self.bs.shape[0]
+
+    def draw(self, rng):
+        indices = draw_sample(rng, self.bs, self.fs)
+        return self.xs[indices]
 
 
 if __name__ == "__main__":
