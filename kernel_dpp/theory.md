@@ -31,6 +31,17 @@ $$
 $$
 Assuming $\|u-u_\star\|_{L^\infty}$ to be negligible, we can optimise the points as to minimise the consant $\mu$.
 A common surrogate for the maximisation of the smallest eigenvalue is the determinant.
+
+> **Note:** To see why the determinant is a good surrogate in this case, observe that
+> $$
+>     \lambda_{\mathrm{max}}(BK^+B^\intercal) = \max_{v\in\mathcal{V}_d} \frac{\|P_Wv\|_{\mathcal{V}}}{\|v\|_{\mathcal{V}}} \le 1 .
+> $$
+> This implies
+> $$
+>     \lambda_{\mathrm{min}}(BK^+B^\intercal)^d \le \det(BK^+B^\intercal) \le \lambda_{\mathrm{min}}(BK^+B^\intercal).
+> $$
+> Hence, a maximiser of the determinant will necessarily maximise the smallest eigenvalue.
+
 And instead of maximising this function directly, we propose to draw samples from it and condition on the event $\mu \le \mu_0$.
 
 ## Well-posedness
@@ -156,6 +167,17 @@ $$
     \ge \max_{v\in \mathcal{V}_d} \frac{\|v\|_{\mathcal{V}}}{\|P_{\tilde{W}}v\|_{\mathcal{V}}}
     = \mu_{\tilde{W}} .
 $$
+
+## Optimisation
+
+Note, that by the preceding argument we can devise an evolutionary optimisation algorithm for the generation of a sample satisfying $\mu\le\mu_0$.
+
+0. Draw an initial sample $\underline{x}$ of size $M$.
+1. Draw a new independent sample $\tilde{\underline{x}}$ of minimal size $d$ and define $\bar{\underline{x}} := (\underline{x}, \tilde{\underline{x}})$.
+2. Greedily remove $d$ samples from $\bar{\underline{x}}$ and store the resulting sample in $\underline{x}$. (The resulting value of $\mu$ must be smaller by monotonicity — at least if we only replace a single sample point.)
+3. Go to 1. or terminate (e.g. after too many stagnations).
+
+> **Question:** What is the maximal value that we can achieve in this way?
 
 ## Example
 
