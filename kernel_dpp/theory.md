@@ -143,6 +143,20 @@ Numerical evidence for this is provided in the subsequent plot.
 
 ![](plot/quasi-optimality_factor.png)
 
+Indeed, this is easy to prove by observing that
+$$
+    \mu = \max_{v\in \mathcal{V}_d} \frac{\|v\|_{\mathcal{V}}}{\|P_Wv\|_{\mathcal{V}}},
+$$
+where $P_W$ is the $\mathcal{V}$-orthogonal projection onto the space $W := \operatorname{span}\{k(x_1,\bullet), \ldots, k(x_n, \bullet)\}$.
+Adding a sample $x_{n+1}$ can only increase the space $W \subseteq \tilde{W} := W \oplus \operatorname{span}\{k(x_{n+1}, \bullet)\}$ and thereby increase the norm $\|P_{\tilde{W}}v\|_{\mathcal{V}} \ge \|P_{W}v\|_{\mathcal{V}}$ for every $v\in\mathcal{V}_d$.
+This implies
+$$
+    \mu_W
+    = \max_{v\in \mathcal{V}_d} \frac{\|v\|_{\mathcal{V}}}{\|P_Wv\|_{\mathcal{V}}}
+    \ge \max_{v\in \mathcal{V}_d} \frac{\|v\|_{\mathcal{V}}}{\|P_{\tilde{W}}v\|_{\mathcal{V}}}
+    = \mu_{\tilde{W}} .
+$$
+
 ## Example
 
 Consider the Hilbert space $\mathcal{V} = H^1([-1, 1])$ with reproducing kernel
