@@ -42,6 +42,9 @@ A common surrogate for the maximisation of the smallest eigenvalue is the determ
 > $$
 > Hence, a maximiser of the determinant will necessarily maximise the smallest eigenvalue.
 
+> **Note:** The preceding remark also implies that $\det(BK^+B^\intercal) \le \lambda_{\mathrm{max}}(BK^+B^\intercal)^d \le 1$.
+> Therefore, $\mathbb{E}[\det(BK^+B^\intercal)] \le 1$ is integrable.
+
 And instead of maximising this function directly, we propose to draw samples from it and condition on the event $\mu \le \mu_0$.
 
 ## Well-posedness
