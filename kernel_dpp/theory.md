@@ -45,6 +45,19 @@ A common surrogate for the maximisation of the smallest eigenvalue is the determ
 > **Note:** The preceding remark also implies that $\det(BK^+B^\intercal) \le \lambda_{\mathrm{max}}(BK^+B^\intercal)^d \le 1$.
 > Therefore, $\mathbb{E}[\det(BK^+B^\intercal)] \le 1$ is integrable.
 
+> **Note:** The maximal value that we can achieve for $\lambda_{\mathrm{min}}(BK^+B^\intercal)^2$ is given by
+> $$
+> \begin{aligned}
+>     \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \min_{\substack{v\in\mathcal{V}_d\\\|v\|_{\mathcal{V}}=1}} \|P_Wv\|_{\mathcal{V}}^2
+>     &= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \min_{\substack{v\in\mathcal{V}_d\\\|v\|_{\mathcal{V}}=1}} (1 - \|(I - P_W)v\|_{\mathcal{V}}^2) \\
+>     &= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \left(1 - \max_{\substack{v\in\mathcal{V}_d\\\|v\|_{\mathcal{V}}=1}} \|(I - P_W)v\|_{\mathcal{V}}^2 \right) \\
+>     &= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \left(1 - \|(I - P_W)P_{\mathcal{V}_d}\|^2 \right) \\
+>     &\overset?= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \left(\|P_{\mathcal{V}_d}\|^2 - \|(I - P_W)P_{\mathcal{V}_d}\|^2 \right) \\
+>     &\overset?= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \|P_WP_{\mathcal{V}_d}\|^2 .
+> \end{aligned}
+> $$
+> This is clearly an approximation theoretic constant that measures how well the functions in $\mathcal{V}_d$ can be approximated by a linear space of the form $W$.
+
 And instead of maximising this function directly, we propose to draw samples from it and condition on the event $\mu \le \mu_0$.
 
 ## Well-posedness
