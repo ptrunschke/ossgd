@@ -15,20 +15,34 @@ $$
 Defining further $u_{\star}\in\mathcal{V}$ as the $L^\infty$-best approximation of $u$ in $\mathcal{V}$ and $u_d\in\mathcal{V}_d$ as the $\mathcal{V}$-best approximation of $u_\star$ in $\mathcal{V}_d$, it has been shown that
 $$
     \|u_\star - u_{d,n}\|_{\mathcal{V}}
-    \le (1 + 2\mu) \|u_\star - u_d\|_{\mathcal{V}_d}  + (1 + 2\mu_\infty) \|u - u_\star\|_{L^\infty} .
+    \le (1 + 2\mu) \|u_\star - u_d\|_{\mathcal{V}_d}  + 2\mu_\infty \|u - u_\star\|_{L^\infty} .
 $$
-
-> **Note:** You can probably not optimise $\mu$ and $\mu_\infty$ simultaneously!
 
 Defining $B_{li} := b_l(x_i)$, the constants $\mu$ and $\mu_\infty$ are given by
 $$
     \mu
     := \max_{v\in\mathcal{V}_d} \frac{\|v\|_{\mathcal{V}}}{\|v\|_{n}}
-    = \lambda_{\mathrm{min}}(BK^+B^\intercal)^{-1}
+    = \lambda_{\mathrm{min}}(BK^+B^\intercal)^{-1/2}
     \qquad\text{and}\qquad
     \mu_\infty
+    % = \mu\beta
     := \max_{v\in\mathcal{V}_d} \frac{\|v\|_{\mathcal{V}}}{\|\boldsymbol{v}\|_{\infty}} .
 $$
+
+> **Note:** We can not optimise $\mu$ and $\mu_\infty$ simultaneously!
+> But observe that
+> $$
+> \begin{aligned}
+>     \mu_\infty
+>     % &= \max_{v\in\mathcal{V}_d} \frac{\|v\|_{\mathcal{V}}}{\|\boldsymbol{v}\|_{\infty}}
+>     = \max_{c\in\mathbb{R}^d} \frac{\|c\|_{2}}{\|c^\intercal B\|_{\infty}}
+>     \le \sqrt{n} \max_{c\in\mathbb{R}^d} \frac{\|c\|_{2}}{\|c^\intercal B\|_{2}}
+>     = \left(\min_{\substack{c\in\mathbb{R}^d\\\|c\|_{2}=1}}\ \frac{1}{n}c^\intercal BB^\intercal c\right)^{-1/2}
+>     = \lambda_{\mathrm{min}}(G)^{-1/2} ,
+> \end{aligned}
+> $$
+> where $G$ is the empirical $L^2$-Gramian matrix of the $\mathcal{V}$-ONB $b_1,\ldots, b_d$.
+
 Assuming $\|u-u_\star\|_{L^\infty}$ to be negligible, we can optimise the points as to minimise the consant $\mu$.
 A common surrogate for the maximisation of the smallest eigenvalue is the determinant.
 
@@ -41,24 +55,13 @@ A common surrogate for the maximisation of the smallest eigenvalue is the determ
 >     \lambda_{\mathrm{min}}(BK^+B^\intercal)^d \le \det(BK^+B^\intercal) \le \lambda_{\mathrm{min}}(BK^+B^\intercal).
 > $$
 > Hence, a maximiser of the determinant will necessarily maximise the smallest eigenvalue.
-
-> **Note:** The preceding remark also implies that $\det(BK^+B^\intercal) \le \lambda_{\mathrm{max}}(BK^+B^\intercal)^d \le 1$.
-> Therefore, $\mathbb{E}[\det(BK^+B^\intercal)] \le 1$ is integrable.
-
-> **Note:** The maximal value that we can achieve for $\lambda_{\mathrm{min}}(BK^+B^\intercal)^2$ is given by
+> It also implies that
 > $$
-> \begin{aligned}
->     \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \min_{\substack{v\in\mathcal{V}_d\\\|v\|_{\mathcal{V}}=1}} \|P_Wv\|_{\mathcal{V}}^2
->     &= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \min_{\substack{v\in\mathcal{V}_d\\\|v\|_{\mathcal{V}}=1}} (1 - \|(I - P_W)v\|_{\mathcal{V}}^2) \\
->     &= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \left(1 - \max_{\substack{v\in\mathcal{V}_d\\\|v\|_{\mathcal{V}}=1}} \|(I - P_W)v\|_{\mathcal{V}}^2 \right) \\
->     &= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \left(1 - \|(I - P_W)P_{\mathcal{V}_d}\|^2 \right) \\
->     &\overset?= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \left(\|P_{\mathcal{V}_d}\|^2 - \|(I - P_W)P_{\mathcal{V}_d}\|^2 \right) \\
->     &\overset?= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \|P_WP_{\mathcal{V}_d}\|^2 .
-> \end{aligned}
+>     \det(BK^+B^\intercal) \le \lambda_{\mathrm{min}}(BK^+B^\intercal) \le \lambda_{\mathrm{max}}(BK^+B^\intercal) \le 1,
 > $$
-> This is clearly an approximation theoretic constant that measures how well the functions in $\mathcal{V}_d$ can be approximated by a linear space of the form $W$.
+> which implies that $\int\det(BK^+B^\intercal)\,\mathrm{d}\rho^{\otimes n} \le 1$ is finite.
 
-And instead of maximising this function directly, we propose to draw samples from it and condition on the event $\mu \le \mu_0$.
+Instead of maximising the determinant function directly, we propose to draw samples from it and condition on the event $\mu \le \mu_0$.
 
 ## Well-posedness
 For it to makes sense to draw a sample from the determinant
@@ -225,4 +228,71 @@ This is illustrated in the subsequent plot.
 
 ![](plot/optimisation_statistics.png)
 
-> **Question:** What is the optimal value that we can achieve in this way? Can we condition on $\mu\le\mu_0$ for some $\mu_0$?
+> **Note:** From a theoretical perspective, it would be interesting to know the minimal value of $\mu$.
+> To answer this question (at least partially), observe that the maximal value that we can achieve for $\lambda_{\mathrm{min}}(BK^+B^\intercal)$ is given by
+> $$
+> \begin{aligned}
+>     \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \min_{\substack{v\in\mathcal{V}_d\\\|v\|_{\mathcal{V}}=1}} \|P_Wv\|_{\mathcal{V}}^2
+>     &= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \min_{\substack{v\in\mathcal{V}_d\\\|v\|_{\mathcal{V}}=1}} (1 - \|(I - P_W)v\|_{\mathcal{V}}^2) \\
+>     &= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \left(1 - \max_{\substack{v\in\mathcal{V}_d\\\|v\|_{\mathcal{V}}=1}} \|(I - P_W)v\|_{\mathcal{V}}^2 \right) \\
+>     &= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \left(1 - \|(I - P_W)P_{\mathcal{V}_d}\|^2 \right) \\
+>     &\overset?= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \left(\|P_{\mathcal{V}_d}\|^2 - \|(I - P_W)P_{\mathcal{V}_d}\|^2 \right) \\
+>     &\overset?= \max_{\substack{W\subseteq\mathcal{V}\\\dim(W) = n}} \|P_WP_{\mathcal{V}_d}\|^2 .
+> \end{aligned}
+> $$
+> This is an approximation theoretic constant that measures how well the functions in $\mathcal{V}_d$ can be approximated by a linear space of the form $W$.
+
+> **Note:** Note, however, that knowledge of this constant is not very relevant in practice.
+In practice, we want to obtain a sample for which $\mu$ satisfies some pre-specified bound $\mu\le\mu_0$ for some $\mu_0 > 0$.
+
+To achieve this goal, we propose the following algorithm.
+
+1. Step
+
+   0. Initialise the accumulate sample $\bar{\underline{x}}$.
+   1. Draw $\underline{x}$ according to the algorithm above uniformly at random.
+   2. Append $\underline{x}$ to the accumulate sample $\bar{\underline{x}}$.
+   3. While $\mu > \mu_0$, go to 1.
+
+2. Step
+
+    0. Choose an oversampling factor $\gamma\in\mathbb{N}$.
+    1. Repeat the above procedure $\gamma$ times.
+    2. Combine the samples into a single accumulate sample $\bar{\underline{x}}$.
+
+3. Step
+
+    1. While $\mu \le \mu_0$, remove the sample which least increases $\mu$.
+
+> **Note:** It would be interesting if we could sample directly from the distribution with a larger sample size. But I think this is not an easy task.
+
+The subsequent figure demonstrates the sample distribution as well as the obtained quasi-optimality factors and sample sizes for this algorithm with $\mu_0 = 2$ and $\beta=1$.
+
+![](plot/optimisation_statistics_sample_size.png)
+
+To demonstrate how this algorithm behaves in practice, we consider again the example from above and approximate the function
+$$
+    u(x) := \sin(2 \pi x) + \cos(2 \pi d x)
+$$
+in a space of polynomials of degree $g \le 9$.
+We then compute the quasi-optimality factor
+$$
+    \hat\mu  \approx \frac{1}{2} \left(\frac{\|u_\star - u_{d,n}\|_{\mathcal{V}}}{\|u_\star - u_d\|_{\mathcal{V}}} - 1 \right)
+$$
+empirically.
+The subsequent plot illustrates that this factor is indeed well below the chosen threshold $\mu_0 = 2$.
+
+![](plot/optimal_sampled_least_squares_wave.png)
+
+The same values for the function
+$$
+    u(x) := \exp(x)
+$$
+are plotted in the subsequent graph.
+![](plot/optimal_sampled_least_squares_exp.png)
+
+Finally, we plot the same values for the function
+$$
+    u(x) := \sum_{k=0}^{30} b_k .
+$$
+![](plot/optimal_sampled_least_squares_ones.png)

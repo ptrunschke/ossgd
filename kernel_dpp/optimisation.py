@@ -150,8 +150,16 @@ if __name__ == "__main__":
     from legendre import hk_gramian, orthonormal_basis
     from least_squares import optimal_least_squares
 
-    aspired_target = lambda x: np.sin(2 * np.pi * x) + np.cos(2 * dimension * np.pi * x)
-    target_dimension = 14
+    # aspired_target = lambda x: np.sin(2 * np.pi * x) + np.cos(2 * dimension * np.pi * x)
+    # target_name = "wave"
+    # target_dimension = 14
+    # aspired_target = np.exp
+    # target_name = "exp"
+    # target_dimension = 14
+    # target_name = "random"
+    # target_dimension = 30
+    target_name = "ones"
+    target_dimension = 30
     assert target_dimension >= dimension
 
     xs = np.linspace(-1, 1, 10_000)
@@ -167,11 +175,16 @@ if __name__ == "__main__":
 
     h1_gramian = hk_gramian(target_dimension, 1)
     h1_legendre = orthonormal_basis(h1_gramian)
-    target_coefficients = np.zeros(target_dimension)
-    e = lambda k: np.eye(1, target_dimension, k=k)[0]
-    for dim in range(target_dimension):
-        basis_function = lambda x: h1_legendre(x, e(dim))
-        target_coefficients[dim] = h1_inner(aspired_target, basis_function, xs)
+    if target_name == "random":
+        target_coefficients = rng.normal(size=target_dimension)
+    elif target_name == "ones":
+        target_coefficients = np.ones(target_dimension)
+    else:
+        target_coefficients = np.zeros(target_dimension)
+        e = lambda k: np.eye(1, target_dimension, k=k)[0]
+        for dim in range(target_dimension):
+            basis_function = lambda x: h1_legendre(x, e(dim))
+            target_coefficients[dim] = h1_inner(aspired_target, basis_function, xs)
 
     target = lambda x: h1_legendre(x, target_coefficients)
 
@@ -195,7 +208,7 @@ if __name__ == "__main__":
         mu_emp = (error / min_error - 1) / 2
         mus_empirical.append(mu_emp)
 
-    plot_path = plot_directory / "optimal_sampled_least_squares.png"
+    plot_path = plot_directory / f"optimal_sampled_least_squares_{target_name}.png"
     fig, ax = plt.subplots(1, 1, figsize=(8, 4), dpi=300)
     ax.hist(mus_empirical, density=True, bins=25)
     ax.set_title("Empirical quasi-optimality factor")
