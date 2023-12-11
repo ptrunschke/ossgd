@@ -277,7 +277,7 @@ $$
 in a space of polynomials of degree $g \le 9$.
 We then compute the quasi-optimality factor
 $$
-    \hat\mu  \approx \frac{1}{2} \left(\frac{\|u_\star - u_{d,n}\|_{\mathcal{V}}}{\|u_\star - u_d\|_{\mathcal{V}}} - 1 \right)
+    \hat\mu \approx \mu \ge \frac{1}{2} \left(\frac{\|u_\star - u_{d,n}\|_{\mathcal{V}}}{\|u_\star - u_d\|_{\mathcal{V}}} - 1 \right)
 $$
 empirically.
 The subsequent plot illustrates that this factor is indeed well below the chosen threshold $\mu_0 = 2$.
