@@ -29,11 +29,14 @@ if __name__ == "__main__":
 
     dimension = 10
     # NOTE: The quality of the samples is not very good for small R.
-    # R = 1 * dimension
+    R = 1 * dimension
     # R = 10 * dimension
-    R = 100 * dimension
+    # R = 100 * dimension
 
-    plot_directory = Path(__file__).parent / "plot" / f"R-{R}"
+    alpha = 1e-1
+    assert alpha == float(f"{alpha:.0e}")
+
+    plot_directory = Path(__file__).parent / "plot" / f"R-{R}_α-{alpha:.0e}"
     plot_directory.mkdir(exist_ok=True)
 
     xs = np.linspace(-1, 1, 1000)
@@ -123,8 +126,6 @@ def draw_sample(rng, bs, fs, plot=False, sample_indices=None):
     assert np.all(b_ch >= -1e-12)
     b_ch = np.maximum(b_ch, 0)
     f_ch /= np.sum(f_ch)
-    alpha = 1e-1
-    # f_ch = alpha / num_nodes + (1 - alpha) * f_ch
     f_ch = np.maximum(f_ch, alpha / num_nodes)
     pdf = b_ch / f_ch
     if plot:
@@ -174,7 +175,7 @@ class Sampler(object):
 
 
 if __name__ == "__main__":
-    from optimal_least_squares import quasi_optimality_constant, bias_constant, optimal_least_squares
+    from least_squares import quasi_optimality_constant, bias_constant, optimal_least_squares
 
     target = lambda x: np.sin(2 * np.pi * x) + np.cos(2 * dimension * np.pi * x)
 
