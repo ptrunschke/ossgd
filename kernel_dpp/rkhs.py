@@ -56,7 +56,27 @@ def test_rkhs_kernel(test_point, test_dimension):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
+    # xs = np.linspace(-1, 1, 1000)
+    # for c in [-0.75, -0.1, 0.0, 0.3, 1]:
+    #     ys = rkhs_kernel(xs, c)
+    #     plt.plot(xs, ys)
+    #     # plt.plot(np.diff(ys))
+    #     # plt.plot(np.diff(np.diff(ys)))
+    # plt.show()
+
+    # cs = np.array([-0.75, -0.1, 0.0, 0.3, 1])
+    # cs = (cs + 1) / 2
+    # xs = (xs + 1) / 2
+    # for c in cs:
+    #     ys = np.where(xs <= c, xs * (1 - c), (1 - xs) * c) / np.sqrt(c * (1 - c))
+    #     plt.plot(2 * xs - 1, ys)
+    # plt.show()
+
     xs = np.linspace(-1, 1, 1000)
-    for c in [-0.75, -0.1, 0.3, 1]:
-        plt.plot(xs, rkhs_kernel(xs, c))
+    kxxs = rkhs_kernel(xs, xs)
+    plt.plot(xs, kxxs, label="H1")
+    zs = (xs + 1) / 2
+    kxxs = zs * (1 - zs) / np.sqrt(zs * (1 - zs))
+    plt.plot(xs, kxxs, label="H10")
+    plt.legend()
     plt.show()

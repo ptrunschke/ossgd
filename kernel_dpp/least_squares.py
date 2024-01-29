@@ -18,25 +18,27 @@ def dpp_kernel_matrix(points, dimension, basis=None):
     return M / es @ M.T
 
 
-def mu_W(points, dimension, basis=None):
-    es = np.linalg.eigvalsh(dpp_kernel_matrix(points, dimension, basis))
-    es = np.maximum(es, 0)
-    return 1 / np.sqrt(np.min(es))
+def mu_W(points, dimension, *, basis=None):
+    # es = np.linalg.eigvalsh(dpp_kernel_matrix(points, dimension, basis))
+    # es = np.maximum(es, 0)
+    # return 1 / np.sqrt(np.min(es))
+    return 1 / np.sqrt(np.linalg.norm(dpp_kernel_matrix(points, dimension, basis), ord=-2))
 
 
-def quasi_optimality_constant(points, dimension, basis=None):
-    return 1 + 2 * mu_W(points, dimension, basis)
+def quasi_optimality_constant(points, dimension, *, basis=None):
+    return 1 + 2 * mu_W(points, dimension, basis=basis)
 
 
-def mu_p(points, dimension, basis=None):
+def mu_p(points, dimension, *, basis=None):
     if basis is None:
         basis = orthonormal_basis(hk_gramian(dimension, 1))
-    M = basis(points, np.eye(dimension))
-    return np.linalg.norm(M, ord=-2)
+    M = basis(points, np.eye(dimension)) / np.sqrt(len(points))
+    # return 1 / np.linalg.norm(M, ord=-2)  # An upper bound for mu_p, when the bias is measured in the L∞ norm.
+    return np.linalg.cond(M)  # The exact value of mu_p, when the bias is measures in the empirical L2 norm.
 
 
-def bias_constant(points, dimension, basis=None):
-    return 1 + 2 * mu_p(points, dimension, basis)
+def bias_constant(points, dimension, *, basis=None):
+    return 2 * mu_p(points, dimension, basis=basis)
 
 
 def optimal_least_squares(function, points, dimension, basis=None):

@@ -2,7 +2,8 @@ import numpy as np
 from tqdm import tqdm, trange
 
 from least_squares import mu_W
-from sampling import Sampler
+# from sampling import Sampler
+from sampling_new import Sampler
 
 
 def greedy_subsample(sample, sample_size, sampler):

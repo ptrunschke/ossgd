@@ -52,7 +52,8 @@ def orthonormal_basis(gramian):
     def evaluate_basis(points, coefficients):
         points = np.asarray(points)
         coefficients = np.asarray(coefficients)
-        assert points.ndim == 1 and coefficients.ndim <= 2
+        # assert points.ndim == 1
+        assert coefficients.ndim <= 2
         assert coefficients.shape[0] <= dimension
         local_L = L[:coefficients.shape[0], :coefficients.shape[0]]
         coefficients = solve_triangular(local_L.T, coefficients, lower=True)
