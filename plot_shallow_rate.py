@@ -10,18 +10,22 @@ root = Path("shallow_sgd_experiments/data")
 stem = "rate_experiment_NGD_projection_samples-optimal_steps-adaptive_threshold_width-{width}-relu_1.npz"
 
 widths = onp.array([5, 10, 15, 20, 25, 30, 35, 40, 50, 75, 100])
-losses = []
+losses_init = []
+losses_term = []
 for width in widths:
     data_path = root / stem.format(width=width)
     z = onp.load(data_path)
-    losses.append(z["losses"][-1])
+    losses_init.append(z["losses"][0])
+    losses_term.append(z["losses"][-1])
 
 plot_path = root.parent / "plot" / "shallow_sgd_rate.pdf"
 
 textcolor, legendcolor, color_1, color_2, color_3 = set_style("bimos")
 fig, ax = plt.subplots(1, 1, figsize=(4, 2.25))
-ax.plot(widths, losses, "o", markersize=6, color=color_1, markeredgewidth=1.5, label="Loss")
+ax.plot(widths, losses_init, "o", markersize=6, fillstyle="full", color=color_1, markeredgewidth=1.5, markerfacecolor=legendcolor, label="Initial loss")
+ax.plot(widths, losses_term, "o", markersize=6, fillstyle="full", color=color_1, markeredgewidth=1.5, label="Terminal loss")
 ax.plot(widths, 1e-1 / widths**3, "--", color=color_2, label="$w^{-3}$ rate", zorder=-1)
+# ax.plot(widths, 1 / widths**4, "--", color=color_2, label="$w^{-4}$ rate", zorder=-1)
 ax.legend()
 ax.set_xscale("log")
 ax.set_yscale("log")

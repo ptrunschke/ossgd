@@ -93,7 +93,7 @@ if __name__ == "__main__":
         return losses, minimal_loss, step_sizes
 
 
-    def plot_data(data_path, plot_path, trendline, teaser, style, relative):
+    def plot_data(data_path, plot_path, trendline, teaser, style, relative, format):
         losses, minimal_loss, step_sizes = load_data(data_path)
         textcolor, legendcolor, color_1, color_2, color_3 = set_style(style)
 
@@ -104,32 +104,42 @@ if __name__ == "__main__":
             fig, ax = plt.subplots(1, 1, figsize=(4, 2.25))
 
         steps = np.arange(len(losses))
+        if teaser:
+            loss_label = "loss"
+            step_size_label = "step size"
+        else:
+            step_size_label = r"$s_t$"
+            if relative:
+                loss_label = r"$\mathcal{L}(v_t) - \mathcal{L}_{\mathrm{min},\mathcal{M}}$"
+            else:
+                loss_label = r"$\mathcal{L}(v_t)$"
         if relative:
             assert minimal_loss is not None
-            ax.plot(steps, losses - minimal_loss, color=color_1, label=r"$\mathcal{L}(v_t) - \mathcal{L}_{\mathrm{min},\mathcal{M}}$")
-            ax.plot(steps[1:], step_sizes, color=color_2, label=r"$s_t$")
+            ax.plot(steps, losses - minimal_loss, color=color_1, label=loss_label)
+            ax.plot(steps[1:], step_sizes, color=color_2, label=step_size_label)
             if trendline:
                 ax.plot(steps[1:], 1 / steps[1:], "--", color=color_3, label=r"$t^{-1}$ rate")
         else:
-            ax.plot(steps, losses, color=color_1, label=r"$\mathcal{L}(v_t)$")
-            ax.plot(steps[1:], step_sizes[1:], color=color_2, label=r"$s_t$")
+            ax.plot(steps, losses, color=color_1, label=loss_label)
+            ax.plot(steps[1:], step_sizes[1:], color=color_2, label=step_size_label)
             if trendline:
                 ax.plot(steps[1:], 1 / np.sqrt(steps[1:]), "--", color=color_3, label=r"$t^{-1/2}$ rate")
+        ax.set_xlim(steps[0], steps[-1])
+        ax.set_yscale("log")
+        ax.set_xscale("symlog", linthresh=1, linscale=0.1)
         if teaser:
             ax.set_xticks([])
             ax.set_xticks([], minor=True)
             ax.set_yticks([])
             ax.set_yticks([], minor=True)
         else:
+            xticks = ax.get_xticks()
+            xticks = [tick for tick in xticks if tick > 0]
+            ax.set_xticks(xticks)
             ax.set_xlabel("step")
-        ax.set_xlim(steps[0], steps[-1])
-        ax.set_yscale("log")
-        ax.set_xscale("symlog", linthresh=1, linscale=0.1)
-        xticks = ax.get_xticks()
-        xticks = [tick for tick in xticks if tick > 0]
-        ax.set_xticks(xticks)
         ax.legend(loc="lower left", facecolor=legendcolor, edgecolor=textcolor, labelcolor=textcolor)
 
+        plot_path = plot_path.with_suffix(f".{format}")
         print(f"Saving: {plot_path}")
         plt.savefig(
             plot_path, dpi=600, edgecolor="none", bbox_inches="tight", transparent=True
@@ -140,5 +150,5 @@ if __name__ == "__main__":
     for label in plots:
         parameters = default_parameters.copy()
         parameters.update(plots[label])
-        plot_path = (config_file.parent / label).with_suffix(".pdf")
+        plot_path = config_file.parent / label
         plot_data(plot_path=plot_path, **parameters)

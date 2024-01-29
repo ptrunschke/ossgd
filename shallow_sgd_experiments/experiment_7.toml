@@ -4,10 +4,17 @@
 ### Here we try to select the step size adaptively.
 target = "sin"
 activation = "relu_2"
+# activation = "relu_1"
 input_dimension = 1
+# width = 5
+# width = 10
+# width = 15
 width = 20
-# width = 50
-# width = 100
+# width = 25
+# width = 30
+# width = 40
+# width = 80
+# width = 160
 output_dimension = 1
 finite_difference = 0
 epoch_length = 100
@@ -34,14 +41,15 @@ loss_estimate_sample_size_init = 10
 # stability_bound = 0.5
 # num_epochs = 1
 
-# method = "NGD_projection"
-# sampling = "optimal"
-# step_size_rule = "adaptive_threshold"
-# sample_size = 200  # == 10 * width
-# # sample_size = 500  # == 10 * width
-# # sample_size = 1000  # == 10 * width
-# stability_bound = 0.5
-# num_epochs = 5
+# data_path = "shallow_sgd_experiments/data/experiment_7_NGD_projection_samples-optimal_steps-adaptive_threshold_width-20.npz"
+method = "NGD_projection"
+sampling = "optimal"
+step_size_rule = "adaptive_threshold"
+sample_size = 200  # == 10 * width
+# sample_size = 500  # == 10 * width
+# sample_size = 1000  # == 10 * width
+stability_bound = 0.5
+num_epochs = 5
 
 # method = "NGD_projection"
 # sampling = "optimal"
@@ -85,13 +93,13 @@ loss_estimate_sample_size_init = 10
 # # sample_size = 1000  # == 10 * width
 # num_epochs = 10
 
-method = "NGD_projection"
-sampling = "optimal"
-step_size_rule = "constant"
-init_step_size = 5e-2
-sample_size = "adaptive"
-stability_bound = 0.5
-num_epochs = 5
+# method = "NGD_projection"
+# sampling = "optimal"
+# step_size_rule = "constant"
+# init_step_size = 5e-2
+# sample_size = "adaptive"
+# stability_bound = 0.5
+# num_epochs = 5
 
 
 

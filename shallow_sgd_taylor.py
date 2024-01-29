@@ -1045,11 +1045,12 @@ for epoch in range(num_epochs):
             def bisect(a, b, rtol=0.5, error_b=None):
                 if error_b is None:
                     error_b = root_objective(b, rtol)
-                if error_b <= 0:  # retraction_error(b) <= retraction_threshold
-                    return b
-                if abs(error_b) <= rtol * retraction_threshold:
+                if error_b <= rtol * retraction_threshold:
+                    # retraction_error(b) <= retraction_threshold
                     return b
                 m = (a + b) / 2
+                if Lip(m) * abs(a - b) <= rtol * retraction_threshold:
+                    return m
                 error_m = root_objective(m, rtol)
                 if error_m > 0:
                     return bisect(a, m, rtol=rtol, error_b=error_m)
